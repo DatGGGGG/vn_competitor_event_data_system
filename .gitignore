@@ -16,3 +16,4 @@ _tmp*/
 htmlcov/
 reports/
 *.egg-info/
+deploy/docker/vm.env

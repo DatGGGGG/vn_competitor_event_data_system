@@ -1,0 +1,46 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: vn-event-dw-api:latest
+    restart: unless-stopped
+    command:
+      - vn-event-dw
+      - serve-api
+      - --db
+      - /app/data/warehouse.db
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8765"
+    volumes:
+      - ${HOST_DATA_DIR}:/app/data:ro
+    ports:
+      - "127.0.0.1:${API_PORT:-8765}:8765"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8765/api/games", timeout=5).read()
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command:
+      - http
+      - api:8765
+      - --domain=${NGROK_DOMAIN}
+      - --log=stdout
+    ports:
+      - "127.0.0.1:${NGROK_INSPECT_PORT:-4040}:4040"

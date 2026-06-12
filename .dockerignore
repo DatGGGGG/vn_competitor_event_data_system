@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+.pytest_cache
+pytest-cache-files-*
+*.py[cod]
+*.egg-info
+.coverage
+htmlcov
+data
+data_ingest
+reports
+tmp
+tmp*/
+_tmp*/
+.env

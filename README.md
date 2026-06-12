@@ -25,6 +25,7 @@ Documentation:
 
 - [Event Lookup API](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/api.md)
 - [Ubuntu VM Deployment](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm.md)
+- [Ubuntu VM Deployment (Docker Compose)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm_docker.md)
 
 Main endpoints:
 
