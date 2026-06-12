@@ -1,0 +1,4 @@
+source_update_id,unified_app_id,update_time,update_type,update_payload
+upd_001,app_001,2026-06-01T04:00:00+07:00,release,"{""channel"": ""google_play"", ""notes"": ""season launch""}"
+upd_002,app_002,2026-06-02T05:30:00+07:00,deploy,"{""channel"": ""app_store"", ""notes"": ""backend patch""}"
+

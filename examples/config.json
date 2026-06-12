@@ -1,0 +1,187 @@
+{
+  "rule_keywords": ["release", "launch", "update"],
+  "app_mappings": [
+    {
+      "unified_app_id": "57955d280211a6718a000002",
+      "fb_page_id": "1722990624697290",
+      "app_name": "Mobile Legends: Bang Bang",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "565ff9f502ac6459a0000035",
+      "fb_page_id": "468000023324394",
+      "app_name": "CrossFire: Legends",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "64c8c3698966bc32a9d8acde",
+      "fb_page_id": "118240937870137",
+      "app_name": "Football Pro VTC",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "6649dddb43c10c0f7eb290d1",
+      "fb_page_id": "320832347773488",
+      "app_name": "Be A Pro: Football",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "69704f05ddddfefb0b0d1e1e",
+      "fb_page_id": "825780510629182",
+      "app_name": "Total Football VNG",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "5aad42d99f479f0a74d40440",
+      "fb_page_id": "251269595573816",
+      "app_name": "PUBG MOBILE",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "55d3a1a802ac64350a000d6e",
+      "fb_page_id": "267696003089092",
+      "app_name": "Roblox",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "5fee6d73b66dd8498d61a935",
+      "fb_page_id": "117000874340678",
+      "app_name": "Play Together: Friends & Party",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "5da67c09a546ab1edeb6c50d",
+      "fb_page_id": "109434243802681",
+      "app_name": "TFT: Teamfight Tactics",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    }
+  ],
+  "sensortower_targets": [
+    {
+      "unified_app_id": "57955d280211a6718a000002",
+      "os": "ios",
+      "app_id": "6468942281",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "57955d280211a6718a000002",
+      "os": "android",
+      "app_id": "com.hhgame.mlbbvn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "565ff9f502ac6459a0000035",
+      "os": "ios",
+      "app_id": "6748588650",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "565ff9f502ac6459a0000035",
+      "os": "android",
+      "app_id": "com.vnggames.cfl.crossfirelegends",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "64c8c3698966bc32a9d8acde",
+      "os": "ios",
+      "app_id": "1663702161",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "64c8c3698966bc32a9d8acde",
+      "os": "android",
+      "app_id": "com.vtcmobile.Ultimatefootballmobile",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "6649dddb43c10c0f7eb290d1",
+      "os": "ios",
+      "app_id": "6471930550",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "6649dddb43c10c0f7eb290d1",
+      "os": "android",
+      "app_id": "gamebongda.bongda.vuabongda.football.kingoffootball.trochoi.mienphi.game.online.vtc",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "69704f05ddddfefb0b0d1e1e",
+      "os": "ios",
+      "app_id": "6754236292",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "69704f05ddddfefb0b0d1e1e",
+      "os": "android",
+      "app_id": "com.vnggames.totalfootball",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5aad42d99f479f0a74d40440",
+      "os": "ios",
+      "app_id": "1438396625",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5aad42d99f479f0a74d40440",
+      "os": "android",
+      "app_id": "com.vng.pubgmobile",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "55d3a1a802ac64350a000d6e",
+      "os": "ios",
+      "app_id": "6474715805",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "55d3a1a802ac64350a000d6e",
+      "os": "android",
+      "app_id": "com.roblox.client.vnggames",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5fee6d73b66dd8498d61a935",
+      "os": "ios",
+      "app_id": "1612175933",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5fee6d73b66dd8498d61a935",
+      "os": "android",
+      "app_id": "com.vng.playtogether",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5da67c09a546ab1edeb6c50d",
+      "os": "ios",
+      "app_id": "6451463643",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5da67c09a546ab1edeb6c50d",
+      "os": "android",
+      "app_id": "com.riotgames.league.teamfighttacticsvn",
+      "country": "VN"
+    }
+  ]
+}

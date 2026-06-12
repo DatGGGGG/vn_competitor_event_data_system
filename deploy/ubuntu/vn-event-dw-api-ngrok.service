@@ -1,0 +1,18 @@
+[Unit]
+Description=VN Event DW API with persistent ngrok tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vn-event
+Group=vn-event
+WorkingDirectory=/opt/vn_event_dw/vn_competitor_event_data_system
+EnvironmentFile=/etc/vn-event-dw-api.env
+ExecStart=/opt/vn_event_dw/vn_competitor_event_data_system/deploy/ubuntu/run_api_ngrok.sh
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
