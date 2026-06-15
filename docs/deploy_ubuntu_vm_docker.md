@@ -7,7 +7,12 @@ It isolates the event API from other projects on the same machine by running:
 - one `api` container
 - one `ngrok` container
 
-The SQLite database stays on the VM host and is mounted read-only into the API container.
+The SQLite database stays on the VM host and is mounted into the API container from the VM filesystem.
+
+Note:
+- the current API startup path still runs schema initialization / lightweight migrations
+- so the container needs write access to the mounted SQLite database
+- do not mount the DB directory read-only unless the API startup flow is changed later
 
 ## Deployment Assets
 
@@ -91,6 +96,11 @@ API_PORT=8765
 NGROK_INSPECT_PORT=4040
 ```
 
+Notes:
+
+- `NGROK_DOMAIN` should be your reserved public HTTPS URL host, for example `april-refund-promoter.ngrok-free.dev`
+- `NGROK_AUTHTOKEN` must be the real token from your ngrok dashboard, not a placeholder
+
 ## 5. Start the Stack
 
 From the repo root on the VM:
@@ -99,6 +109,8 @@ From the repo root on the VM:
 cd /opt/vn_event_dw/vn_competitor_event_data_system
 docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml up -d --build
 ```
+
+If your VM user is not in the Docker group, use `sudo docker compose ...` instead.
 
 ## 6. Check Container Health
 
@@ -133,6 +145,8 @@ cd /opt/vn_event_dw/vn_competitor_event_data_system
 git pull
 docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml up -d --build
 ```
+
+If your VM uses `sudo` for Docker, prefix the compose commands accordingly.
 
 ### Database refresh
 

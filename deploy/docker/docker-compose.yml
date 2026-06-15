@@ -15,7 +15,7 @@ services:
       - --port
       - "8765"
     volumes:
-      - ${HOST_DATA_DIR}:/app/data:ro
+      - ${HOST_DATA_DIR}:/app/data
     ports:
       - "127.0.0.1:${API_PORT:-8765}:8765"
     healthcheck:
@@ -40,7 +40,7 @@ services:
     command:
       - http
       - api:8765
-      - --domain=${NGROK_DOMAIN}
+      - --url=${NGROK_DOMAIN}
       - --log=stdout
     ports:
       - "127.0.0.1:${NGROK_INSPECT_PORT:-4040}:4040"
