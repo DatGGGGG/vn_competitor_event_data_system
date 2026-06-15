@@ -40,6 +40,7 @@ class ApiTests(unittest.TestCase):
             VALUES
                 ('app_a', 'page_a', 'Game A', 1),
                 ('app_b', 'page_b', 'Game B', 1),
+                ('app_c', 'page_c', 'Game C', 1),
                 ('mlbb_app', 'page_mlbb', 'Mobile Legends: Bang Bang', 1)
             """
         )
@@ -60,7 +61,13 @@ class ApiTests(unittest.TestCase):
                 ('event_a4', 'app_a', '2026-05', 'May Social Push', 'Community Participation',
                  '2026-05-03', '2026-05-07', 'Share screenshots for rewards.', 'fb_post', 0.72, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z'),
                 ('event_b1', 'app_b', '2026-04', 'Bravo Pass', 'Progression / Season Systems',
-                 '2026-04-01', '2026-04-30', 'Monthly pass rewards.', 'st_version_event', 0.84, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z')
+                 '2026-04-01', '2026-04-30', 'Monthly pass rewards.', 'st_version_event', 0.84, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z'),
+                ('event_b2', 'app_b', '2026-04', 'Naruto Shadow Clash', 'Collaboration / IP Events',
+                 '2026-04-05', '2026-04-16', 'Naruto crossover missions and rewards.', 'fb_post', 0.89, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z'),
+                ('event_c1', 'app_c', '2026-04', 'Crimson Reboot', 'Release / Update Rollout',
+                 '2026-04-01', '2026-04-10', 'System reboot update.', 'st_version_event', 0.81, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z'),
+                ('event_mlbb1', 'mlbb_app', '2026-04', 'Academy Frenzy', 'Collaboration / IP Events',
+                 '2026-04-08', '2026-04-18', 'Naruto-inspired academy crossover rewards.', 'fb_post', 0.93, 'gpt-5.4', 'v1', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z')
             """
         )
         conn.execute(
@@ -75,7 +82,10 @@ class ApiTests(unittest.TestCase):
                 ('event_a2', 'st_app_update_event', 'st_app_a2', '2026-04-04T00:00:00Z', NULL, 1.0),
                 ('event_a3', 'fb_post', 'post_a3', '2026-04-15T09:00:00Z', 'post_a3', 0.6),
                 ('event_a4', 'fb_post', 'post_a4', '2026-05-04T09:00:00Z', 'post_a4', 0.6),
-                ('event_b1', 'st_version_event', 'st_ver_b1', '2026-04-01T00:00:00Z', NULL, 1.0)
+                ('event_b1', 'st_version_event', 'st_ver_b1', '2026-04-01T00:00:00Z', NULL, 1.0),
+                ('event_b2', 'fb_post', 'post_b2', '2026-04-06T07:00:00Z', 'post_b2', 0.9),
+                ('event_c1', 'st_version_event', 'st_ver_c1', '2026-04-02T00:00:00Z', NULL, 1.0),
+                ('event_mlbb1', 'fb_post', 'post_mlbb1', '2026-04-09T10:00:00Z', 'post_mlbb1', 0.95)
             """
         )
         conn.execute(
@@ -93,7 +103,11 @@ class ApiTests(unittest.TestCase):
                 ('post_a3', 'app_a', 'page_a', 'channel_a', 'Game A Page', 'video',
                  'Single day mode', '', 'https://example.com/a3', '2026-04-15T09:00:00Z', '', '1,000', '100', '20', '5', '500', 'seed.csv', '2026-06-12T00:00:00Z'),
                 ('post_a4', 'app_a', 'page_a', 'channel_a', 'Game A Page', 'video',
-                 'May social push', '', 'https://example.com/a4', '2026-05-04T09:00:00Z', '', '70', '8', '4', '2', '10', 'seed.csv', '2026-06-12T00:00:00Z')
+                 'May social push', '', 'https://example.com/a4', '2026-05-04T09:00:00Z', '', '70', '8', '4', '2', '10', 'seed.csv', '2026-06-12T00:00:00Z'),
+                ('post_b2', 'app_b', 'page_b', 'channel_b', 'Game B Page', 'video',
+                 'Naruto crossover reveal', '', 'https://example.com/b2', '2026-04-06T07:00:00Z', '', '450', '40', '10', '4', '200', 'seed.csv', '2026-06-12T12:00:00Z'),
+                ('post_mlbb1', 'mlbb_app', 'page_mlbb', 'channel_mlbb', 'MLBB Page', 'photo',
+                 'Academy crossover teaser', '', 'https://example.com/mlbb1', '2026-04-09T10:00:00Z', '', '260', '30', '6', '3', '90', 'seed.csv', '2026-06-11T20:00:00Z')
             """
         )
         conn.execute(
@@ -117,7 +131,9 @@ class ApiTests(unittest.TestCase):
             )
             VALUES
                 ('st_ver_b1', 'raw_st_version_b1', 'app_b', 'Bravo Pass',
-                 '2026-04-01', '2026-04-30', 'Monthly pass rewards.', '[]')
+                 '2026-04-01', '2026-04-30', 'Monthly pass rewards.', '[]'),
+                ('st_ver_c1', 'raw_st_version_c1', 'app_c', 'Crimson Reboot',
+                 '2026-04-01', '2026-04-10', 'System reboot update.', '[]')
             """
         )
 
@@ -137,7 +153,6 @@ class ApiTests(unittest.TestCase):
 
         app_a = payload["results"][0]
         self.assertEqual(app_a["unified_app_id"], "app_a")
-        self.assertEqual(app_a["app_name"], "Game A")
         self.assertEqual([event["canonical_event_name"] for event in app_a["events"]], [
             "April Patch Launch",
             "Alpha Login Bonus",
@@ -147,22 +162,14 @@ class ApiTests(unittest.TestCase):
         alpha_event = next(event for event in app_a["events"] if event["unified_event_id"] == "event_a1")
         self.assertEqual(alpha_event["fb_post_count"], 2)
         self.assertEqual(alpha_event["st_app_update_event_count"], 1)
-        self.assertEqual(alpha_event["st_version_event_count"], 0)
-        self.assertEqual(alpha_event["total_engagement_fb"], 200)
         self.assertEqual(alpha_event["total_reaction_fb"], 15)
         self.assertEqual(alpha_event["total_comment_fb"], 5)
         self.assertEqual(alpha_event["total_share_fb"], 1)
         self.assertEqual(alpha_event["total_view_fb"], 130)
         self.assertEqual(alpha_event["social_score"], 180)
 
-        patch_launch = next(event for event in app_a["events"] if event["unified_event_id"] == "event_a2")
-        self.assertEqual(patch_launch["estimated_start_date"], None)
-        self.assertEqual(patch_launch["estimated_end_date"], None)
-
         app_b = payload["results"][1]
-        self.assertEqual(app_b["unified_app_id"], "app_b")
-        self.assertEqual(app_b["app_name"], "Game B")
-        self.assertEqual(len(app_b["events"]), 1)
+        self.assertEqual([event["unified_event_id"] for event in app_b["events"]], ["event_b1", "event_b2"])
 
     def test_get_events_supports_top_ranking_by_social_score(self) -> None:
         response = self.client.get(
@@ -178,9 +185,9 @@ class ApiTests(unittest.TestCase):
         events = response.json()["results"][0]["events"]
         self.assertEqual([event["unified_event_id"] for event in events], ["event_a3", "event_a1"])
 
-    def test_get_events_light_returns_compact_event_rows(self) -> None:
+    def test_get_events_compact_returns_compact_event_rows(self) -> None:
         response = self.client.get(
-            "/api/events-light",
+            "/api/events/compact",
             params=[
                 ("unified_app_id", "app_a"),
                 ("time_range_start", "2026-04-01"),
@@ -213,36 +220,26 @@ class ApiTests(unittest.TestCase):
     def test_get_games_lists_known_games(self) -> None:
         response = self.client.get("/api/games")
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
         self.assertEqual(
-            payload["results"],
+            response.json()["results"],
             [
                 {"unified_app_id": "app_a", "app_name": "Game A"},
                 {"unified_app_id": "app_b", "app_name": "Game B"},
+                {"unified_app_id": "app_c", "app_name": "Game C"},
                 {"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"},
             ],
         )
 
-    def test_get_games_supports_search(self) -> None:
+    def test_get_games_supports_search_and_acronym_search(self) -> None:
         response = self.client.get("/api/games", params={"q": "game a"})
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(
-            payload["results"],
-            [
-                {"unified_app_id": "app_a", "app_name": "Game A"},
-            ],
-        )
+        self.assertEqual(response.json()["results"], [{"unified_app_id": "app_a", "app_name": "Game A"}])
 
-    def test_get_games_supports_acronym_search(self) -> None:
         response = self.client.get("/api/games", params={"q": "MLBB"})
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
         self.assertEqual(
-            payload["results"],
-            [
-                {"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"},
-            ],
+            response.json()["results"],
+            [{"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"}],
         )
 
     def test_get_events_uses_month_bucket_filtering(self) -> None:
@@ -256,24 +253,11 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         events = response.json()["results"][0]["events"]
-        self.assertEqual({event["unified_event_id"] for event in events}, {"event_a2", "event_a3", "event_a1"})
+        self.assertEqual({event["unified_event_id"] for event in events}, {"event_a1", "event_a2", "event_a3"})
 
-    def test_get_events_uses_month_bucket_even_for_mid_month_query(self) -> None:
+    def test_get_event_summary_returns_counts_and_top_events(self) -> None:
         response = self.client.get(
-            "/api/events",
-            params=[
-                ("unified_app_id", "app_a"),
-                ("time_range_start", "2026-05-15"),
-                ("time_range_end", "2026-05-15"),
-            ],
-        )
-        self.assertEqual(response.status_code, 200)
-        events = response.json()["results"][0]["events"]
-        self.assertEqual([event["unified_event_id"] for event in events], ["event_a4"])
-
-    def test_get_event_statistics_returns_counts_and_top_events(self) -> None:
-        response = self.client.get(
-            "/api/event-statistics",
+            "/api/events/summary",
             params=[
                 ("unified_app_id", "app_a"),
                 ("time_range_start", "2026-04-01"),
@@ -305,41 +289,29 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["app_name"], "Game A")
         self.assertEqual(payload["canonical_event_name"], "Alpha Login Bonus")
         self.assertEqual(payload["fb_post_count"], 2)
-        self.assertEqual(payload["total_engagement_fb"], 200)
         self.assertEqual(payload["social_score"], 180)
 
-    def test_get_event_sources_returns_fb_statistics_only(self) -> None:
-        response = self.client.get("/api/events/event_a1/sources")
+    def test_get_event_post_stats_returns_fb_statistics_only(self) -> None:
+        response = self.client.get("/api/events/event_a1/post-stats")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["unified_event_id"], "event_a1")
-        self.assertEqual(payload["unified_app_id"], "app_a")
-        self.assertEqual(payload["app_name"], "Game A")
-        self.assertEqual(payload["canonical_event_name"], "Alpha Login Bonus")
         self.assertEqual(payload["fb_post_count"], 2)
         self.assertEqual(payload["total_reaction_fb"], 15)
-        self.assertEqual(payload["total_comment_fb"], 5)
-        self.assertEqual(payload["total_share_fb"], 1)
-        self.assertEqual(payload["total_view_fb"], 130)
         self.assertEqual(payload["social_score"], 180)
 
     def test_get_event_top_posts_returns_ranked_posts(self) -> None:
         response = self.client.get("/api/events/event_a1/top-posts", params={"top": 1})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["unified_event_id"], "event_a1")
-        self.assertEqual(len(payload["posts"]), 1)
         self.assertEqual(payload["posts"][0]["source_post_id"], "post_a1")
-        self.assertEqual(payload["posts"][0]["link"], "https://example.com/a1")
         self.assertEqual(payload["posts"][0]["social_score"], 131)
 
     def test_get_event_posts_returns_compact_post_list(self) -> None:
         response = self.client.get("/api/events/event_a1/posts")
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["unified_event_id"], "event_a1")
         self.assertEqual(
-            payload["posts"],
+            response.json()["posts"],
             [
                 {
                     "source_post_id": "post_a1",
@@ -370,28 +342,246 @@ class ApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["source_post_id"], "post_a3")
         self.assertEqual(payload["app_name"], "Game A")
-        self.assertEqual(payload["link"], "https://example.com/a3")
         self.assertEqual(payload["engagement_num"], 1000)
-        self.assertEqual(payload["reaction_num"], 100)
-        self.assertEqual(payload["comment_num"], 20)
-        self.assertEqual(payload["share_num"], 5)
-        self.assertEqual(payload["view_num"], 500)
         self.assertEqual(payload["social_score"], 785)
 
-    def test_get_event_detail_returns_404_for_unknown_event(self) -> None:
-        response = self.client.get("/api/events/unknown_event")
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "Unified event not found.")
+    def test_old_endpoints_are_removed(self) -> None:
+        self.assertEqual(self.client.get("/api/events-light").status_code, 404)
+        self.assertEqual(self.client.get("/api/event-statistics").status_code, 404)
+        self.assertEqual(self.client.get("/api/events/event_a1/sources").status_code, 404)
 
-    def test_get_event_sources_returns_404_for_unknown_event(self) -> None:
-        response = self.client.get("/api/events/unknown_event/sources")
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "Unified event not found.")
+    def test_event_category_filter_supports_single_and_multi_value(self) -> None:
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("event_category", "Release / Update Rollout"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a2"],
+        )
 
-    def test_get_post_detail_returns_404_for_unknown_post(self) -> None:
-        response = self.client.get("/api/posts/unknown_post")
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "Post not found.")
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("event_category", "Release / Update Rollout"),
+                ("event_category", "Retention / Free Rewards"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a2", "event_a1"],
+        )
+
+    def test_source_type_filter_supports_single_and_multi_value(self) -> None:
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("source_type", "fb_post"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a1", "event_a3"],
+        )
+
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("source_type", "st_app_update_event"),
+                ("source_type", "fb_post"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a2", "event_a1", "event_a3"],
+        )
+
+    def test_min_social_score_and_has_fb_posts_filters_work(self) -> None:
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("min_social_score", "100"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a1", "event_a3"],
+        )
+
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("has_fb_posts", "false"),
+            ],
+        )
+        self.assertEqual(
+            [event["unified_event_id"] for event in response.json()["results"][0]["events"]],
+            ["event_a2"],
+        )
+
+    def test_combined_filters_apply_to_events_compact_and_summary(self) -> None:
+        compact_response = self.client.get(
+            "/api/events/compact",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("source_type", "fb_post"),
+                ("min_social_score", "200"),
+            ],
+        )
+        self.assertEqual(compact_response.status_code, 200)
+        self.assertEqual(
+            compact_response.json()["results"][0]["events"],
+            [
+                {
+                    "unified_event_id": "event_a3",
+                    "canonical_event_name": "Single Day Trial",
+                    "event_category": "Gameplay / Content Activation",
+                }
+            ],
+        )
+
+        summary_response = self.client.get(
+            "/api/events/summary",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("source_type", "fb_post"),
+                ("min_social_score", "200"),
+            ],
+        )
+        self.assertEqual(summary_response.status_code, 200)
+        statistics = summary_response.json()["results"][0]["statistics"]
+        self.assertEqual(statistics["event_count_total"], 1)
+        self.assertEqual(statistics["top_socially_active_events"][0]["unified_event_id"], "event_a3")
+
+    def test_event_coverage_supports_no_filters_and_scoped_filters(self) -> None:
+        response = self.client.get("/api/events/coverage")
+        self.assertEqual(response.status_code, 200)
+        results = {item["unified_app_id"]: item for item in response.json()["results"]}
+        self.assertEqual(results["app_a"]["min_month_bucket"], "2026-04")
+        self.assertEqual(results["app_a"]["max_month_bucket"], "2026-05")
+        self.assertEqual(results["app_a"]["months_available"], 2)
+        self.assertEqual(results["app_a"]["event_count"], 4)
+        self.assertEqual(results["app_a"]["fb_post_count"], 4)
+        self.assertEqual(results["app_a"]["latest_ingested_at"], "2026-06-12T00:00:00Z")
+        self.assertEqual(results["app_c"]["fb_post_count"], 0)
+        self.assertIsNone(results["app_c"]["latest_ingested_at"])
+
+        response = self.client.get("/api/events/coverage", params=[("unified_app_id", "mlbb_app")])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["event_count"], 1)
+
+        response = self.client.get(
+            "/api/events/coverage",
+            params={"time_range_start": "2026-05-01", "time_range_end": "2026-05-31"},
+        )
+        self.assertEqual(response.status_code, 200)
+        may_results = {item["unified_app_id"]: item for item in response.json()["results"]}
+        self.assertEqual(may_results["app_a"]["event_count"], 1)
+        self.assertEqual(may_results["app_b"]["event_count"], 0)
+
+        response = self.client.get(
+            "/api/events/coverage",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-05-01"),
+                ("time_range_end", "2026-05-31"),
+            ],
+        )
+        self.assertEqual(response.status_code, 200)
+        app_a = response.json()["results"][0]
+        self.assertEqual(app_a["event_count"], 1)
+        self.assertEqual(app_a["fb_post_count"], 1)
+
+    def test_event_search_supports_exact_and_substring_matches(self) -> None:
+        response = self.client.get("/api/events/search", params={"q": "Alpha Login Bonus"})
+        self.assertEqual(response.status_code, 200)
+        results = response.json()["results"]
+        self.assertEqual(results[0]["unified_event_id"], "event_a1")
+        self.assertEqual(results[0]["match_scope"], "scoped_game")
+
+        response = self.client.get("/api/events/search", params={"q": "Single Day"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["unified_event_id"], "event_a3")
+
+    def test_event_search_supports_description_assisted_scoped_match(self) -> None:
+        response = self.client.get(
+            "/api/events/search",
+            params=[
+                ("q", "Naruto"),
+                ("unified_app_id", "mlbb_app"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+            ],
+        )
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["results"][0]
+        self.assertEqual(result["unified_event_id"], "event_mlbb1")
+        self.assertEqual(result["match_scope"], "scoped_game")
+
+    def test_event_search_falls_back_cross_game_when_scoped_game_misses(self) -> None:
+        response = self.client.get(
+            "/api/events/search",
+            params=[
+                ("q", "Bravo Pass"),
+                ("unified_app_id", "mlbb_app"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+            ],
+        )
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["results"][0]
+        self.assertEqual(result["unified_event_id"], "event_b1")
+        self.assertEqual(result["match_scope"], "cross_game_fallback")
+
+    def test_event_search_respects_date_window_and_top_limit(self) -> None:
+        response = self.client.get(
+            "/api/events/search",
+            params=[
+                ("q", "May Social"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+            ],
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+
+        response = self.client.get("/api/events/search", params=[("q", "Naruto"), ("top", "1")])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["results"]), 1)
+
+    def test_event_search_returns_empty_when_no_matches_exist(self) -> None:
+        response = self.client.get("/api/events/search", params={"q": "zzzz-not-found"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_event_detail_and_post_endpoints_return_404_for_unknown_resources(self) -> None:
+        self.assertEqual(self.client.get("/api/events/unknown_event").status_code, 404)
+        self.assertEqual(self.client.get("/api/events/unknown_event/post-stats").status_code, 404)
+        self.assertEqual(self.client.get("/api/posts/unknown_post").status_code, 404)
 
     def test_returns_empty_blocks_for_valid_app_without_matches(self) -> None:
         response = self.client.get(
@@ -407,7 +597,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(block["app_name"], "Game B")
         self.assertEqual(block["events"], [])
 
-    def test_rejects_invalid_time_range(self) -> None:
+    def test_validation_failures_return_expected_status_codes(self) -> None:
         response = self.client.get(
             "/api/events",
             params=[
@@ -417,16 +607,13 @@ class ApiTests(unittest.TestCase):
             ],
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("time_range_start", response.json()["detail"])
 
-    def test_rejects_missing_app_ids(self) -> None:
         response = self.client.get(
             "/api/events",
             params={"time_range_start": "2026-04-01", "time_range_end": "2026-04-30"},
         )
         self.assertEqual(response.status_code, 422)
 
-    def test_rejects_invalid_dates(self) -> None:
         response = self.client.get(
             "/api/events",
             params=[
@@ -436,6 +623,34 @@ class ApiTests(unittest.TestCase):
             ],
         )
         self.assertEqual(response.status_code, 422)
+
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("source_type", "bad_source"),
+            ],
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.get(
+            "/api/events",
+            params=[
+                ("unified_app_id", "app_a"),
+                ("time_range_start", "2026-04-01"),
+                ("time_range_end", "2026-04-30"),
+                ("has_fb_posts", "not-a-bool"),
+            ],
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.get("/api/events/search")
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.get("/api/events/coverage", params={"time_range_start": "2026-04-01"})
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

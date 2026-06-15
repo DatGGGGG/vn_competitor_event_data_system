@@ -3,24 +3,28 @@ from __future__ import annotations
 import os
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 from .api_service import (
+    fetch_event_coverage,
     fetch_event_detail,
     fetch_event_post_statistics,
-    fetch_event_statistics,
+    fetch_event_posts_light,
+    fetch_event_search,
+    fetch_event_summary,
     fetch_event_top_fb_posts,
     fetch_events,
-    fetch_events_light,
-    fetch_event_posts_light,
+    fetch_events_compact,
     fetch_games,
     fetch_post_detail,
     validate_event_lookup_params,
 )
 from .etl import open_connection
+
+SourceType = Literal["fb_post", "st_app_update_event", "st_version_event"]
 
 
 class EventResponseItem(BaseModel):
@@ -54,20 +58,20 @@ class EventsResponse(BaseModel):
     results: list[EventsByAppResponse]
 
 
-class LightEventResponseItem(BaseModel):
+class CompactEventResponseItem(BaseModel):
     unified_event_id: str
     canonical_event_name: str
     event_category: str
 
 
-class LightEventsByAppResponse(BaseModel):
+class CompactEventsByAppResponse(BaseModel):
     unified_app_id: str
     app_name: str
-    events: list[LightEventResponseItem]
+    events: list[CompactEventResponseItem]
 
 
-class LightEventsResponse(BaseModel):
-    results: list[LightEventsByAppResponse]
+class CompactEventsResponse(BaseModel):
+    results: list[CompactEventsByAppResponse]
 
 
 class GameLookupResponseItem(BaseModel):
@@ -91,7 +95,7 @@ class TopSocialEventResponse(BaseModel):
     total_view_fb: int
 
 
-class EventStatisticsResponseItem(BaseModel):
+class EventSummaryResponseItem(BaseModel):
     event_count_total: int
     event_count_st_app_update: int
     event_count_st_version: int
@@ -104,14 +108,14 @@ class EventStatisticsResponseItem(BaseModel):
     top_socially_active_events: list[TopSocialEventResponse]
 
 
-class EventStatisticsByAppResponse(BaseModel):
+class EventSummaryByAppResponse(BaseModel):
     unified_app_id: str
     app_name: str
-    statistics: EventStatisticsResponseItem
+    statistics: EventSummaryResponseItem
 
 
-class EventStatisticsResponse(BaseModel):
-    results: list[EventStatisticsByAppResponse]
+class EventSummaryResponse(BaseModel):
+    results: list[EventSummaryByAppResponse]
 
 
 class EventDetailResponse(BaseModel):
@@ -213,6 +217,39 @@ class PostDetailResponse(BaseModel):
     social_score: int
 
 
+class EventCoverageResponseItem(BaseModel):
+    unified_app_id: str
+    app_name: str
+    min_month_bucket: str | None
+    max_month_bucket: str | None
+    months_available: int
+    event_count: int
+    fb_post_count: int
+    latest_ingested_at: str | None
+
+
+class EventCoverageResponse(BaseModel):
+    results: list[EventCoverageResponseItem]
+
+
+class EventSearchResponseItem(BaseModel):
+    unified_event_id: str
+    unified_app_id: str
+    app_name: str
+    canonical_event_name: str
+    event_category: str
+    canonical_event_description: str
+    month_bucket: str
+    social_score: int
+    fb_post_count: int
+    match_score: float
+    match_scope: Literal["scoped_game", "cross_game_fallback"]
+
+
+class EventSearchResponse(BaseModel):
+    results: list[EventSearchResponseItem]
+
+
 def _resolve_db_path(db_path: str | Path | None) -> Path:
     resolved = db_path or os.getenv("VN_EVENT_DW_DB_PATH", "").strip()
     if not resolved:
@@ -239,6 +276,35 @@ def create_app(*, db_path: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return list(validated.unified_app_ids), validated.time_range_start, validated.time_range_end
 
+    def _filters(
+        event_category: Annotated[list[str] | None, Query()] = None,
+        source_type: Annotated[list[SourceType] | None, Query()] = None,
+        min_social_score: Annotated[int | None, Query(ge=0)] = None,
+        has_fb_posts: bool | None = None,
+    ) -> dict[str, object]:
+        return {
+            "event_categories": event_category,
+            "source_types": source_type,
+            "min_social_score": min_social_score,
+            "has_fb_posts": has_fb_posts,
+        }
+
+    def _optional_date_scope(
+        time_range_start: date | None = None,
+        time_range_end: date | None = None,
+    ) -> tuple[date | None, date | None]:
+        if (time_range_start is None) != (time_range_end is None):
+            raise HTTPException(
+                status_code=400,
+                detail="time_range_start and time_range_end must both be provided.",
+            )
+        if time_range_start is not None and time_range_end is not None and time_range_start > time_range_end:
+            raise HTTPException(
+                status_code=400,
+                detail="time_range_start must be on or before time_range_end.",
+            )
+        return time_range_start, time_range_end
+
     @app.get("/api/games", response_model=GameLookupResponse)
     def get_games(
         q: Annotated[str | None, Query(min_length=1)] = None,
@@ -253,6 +319,7 @@ def create_app(*, db_path: str | Path | None = None) -> FastAPI:
     @app.get("/api/events", response_model=EventsResponse)
     def get_events(
         lookup: tuple[list[str], date, date] = Depends(_lookup_params),
+        filters: dict[str, object] = Depends(_filters),
         top: Annotated[int | None, Query(ge=1)] = None,
     ) -> EventsResponse:
         unified_app_ids, time_range_start, time_range_end = lookup
@@ -264,58 +331,96 @@ def create_app(*, db_path: str | Path | None = None) -> FastAPI:
                 time_range_start=time_range_start,
                 time_range_end=time_range_end,
                 top=top,
+                **filters,
             )
         finally:
             conn.close()
         return EventsResponse(results=results)
 
-    @app.get("/api/events-light", response_model=LightEventsResponse)
-    def get_events_light(
+    @app.get("/api/events/compact", response_model=CompactEventsResponse)
+    def get_events_compact(
         lookup: tuple[list[str], date, date] = Depends(_lookup_params),
-    ) -> LightEventsResponse:
+        filters: dict[str, object] = Depends(_filters),
+    ) -> CompactEventsResponse:
         unified_app_ids, time_range_start, time_range_end = lookup
         conn = open_connection(resolved_db_path)
         try:
-            results = fetch_events_light(
+            results = fetch_events_compact(
                 conn,
                 unified_app_ids=unified_app_ids,
                 time_range_start=time_range_start,
                 time_range_end=time_range_end,
+                **filters,
             )
         finally:
             conn.close()
-        return LightEventsResponse(results=results)
+        return CompactEventsResponse(results=results)
 
-    @app.get("/api/event-statistics", response_model=EventStatisticsResponse)
-    def get_event_statistics(
+    @app.get("/api/events/summary", response_model=EventSummaryResponse)
+    def get_event_summary(
         lookup: tuple[list[str], date, date] = Depends(_lookup_params),
-    ) -> EventStatisticsResponse:
+        filters: dict[str, object] = Depends(_filters),
+    ) -> EventSummaryResponse:
         unified_app_ids, time_range_start, time_range_end = lookup
         conn = open_connection(resolved_db_path)
         try:
-            results = fetch_event_statistics(
+            results = fetch_event_summary(
                 conn,
                 unified_app_ids=unified_app_ids,
                 time_range_start=time_range_start,
                 time_range_end=time_range_end,
+                **filters,
             )
         finally:
             conn.close()
-        return EventStatisticsResponse(results=results)
+        return EventSummaryResponse(results=results)
 
-    @app.get("/api/events/{unified_event_id}", response_model=EventDetailResponse)
-    def get_event_detail(unified_event_id: str) -> EventDetailResponse:
+    @app.get("/api/events/coverage", response_model=EventCoverageResponse)
+    def get_event_coverage(
+        unified_app_id: Annotated[list[str] | None, Query(min_length=1)] = None,
+        date_scope: tuple[date | None, date | None] = Depends(_optional_date_scope),
+    ) -> EventCoverageResponse:
+        time_range_start, time_range_end = date_scope
         conn = open_connection(resolved_db_path)
         try:
-            result = fetch_event_detail(conn, unified_event_id=unified_event_id)
+            results = fetch_event_coverage(
+                conn,
+                unified_app_ids=unified_app_id,
+                time_range_start=time_range_start,
+                time_range_end=time_range_end,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
             conn.close()
-        if result is None:
-            raise HTTPException(status_code=404, detail="Unified event not found.")
-        return EventDetailResponse(**result)
+        return EventCoverageResponse(results=results)
 
-    @app.get("/api/events/{unified_event_id}/sources", response_model=EventPostStatisticsResponse)
-    def get_event_sources(unified_event_id: str) -> EventPostStatisticsResponse:
+    @app.get("/api/events/search", response_model=EventSearchResponse)
+    def get_event_search(
+        q: Annotated[str, Query(min_length=1)],
+        unified_app_id: Annotated[list[str] | None, Query(min_length=1)] = None,
+        date_scope: tuple[date | None, date | None] = Depends(_optional_date_scope),
+        top: Annotated[int, Query(ge=1)] = 10,
+    ) -> EventSearchResponse:
+        time_range_start, time_range_end = date_scope
+        conn = open_connection(resolved_db_path)
+        try:
+            results = fetch_event_search(
+                conn,
+                q=q,
+                unified_app_ids=unified_app_id,
+                time_range_start=time_range_start,
+                time_range_end=time_range_end,
+                top=top,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            conn.close()
+        return EventSearchResponse(results=results)
+
+    @app.get("/api/events/{unified_event_id}/post-stats", response_model=EventPostStatisticsResponse)
+    def get_event_post_stats(unified_event_id: str) -> EventPostStatisticsResponse:
         conn = open_connection(resolved_db_path)
         try:
             result = fetch_event_post_statistics(conn, unified_event_id=unified_event_id)
@@ -349,6 +454,17 @@ def create_app(*, db_path: str | Path | None = None) -> FastAPI:
         if result is None:
             raise HTTPException(status_code=404, detail="Unified event not found.")
         return EventPostsLightResponse(**result)
+
+    @app.get("/api/events/{unified_event_id}", response_model=EventDetailResponse)
+    def get_event_detail(unified_event_id: str) -> EventDetailResponse:
+        conn = open_connection(resolved_db_path)
+        try:
+            result = fetch_event_detail(conn, unified_event_id=unified_event_id)
+        finally:
+            conn.close()
+        if result is None:
+            raise HTTPException(status_code=404, detail="Unified event not found.")
+        return EventDetailResponse(**result)
 
     @app.get("/api/posts/{source_post_id}", response_model=PostDetailResponse)
     def get_post(source_post_id: str) -> PostDetailResponse:

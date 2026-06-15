@@ -24,6 +24,7 @@ The project also exposes a small read-only event lookup API.
 Documentation:
 
 - [Event Lookup API](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/api.md)
+- [Event Lookup API Technical Spec](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/api_technical_spec.md)
 - [Ubuntu VM Deployment](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm.md)
 - [Ubuntu VM Deployment (Docker Compose)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm_docker.md)
 
@@ -31,10 +32,12 @@ Main endpoints:
 
 - `GET /api/games`
 - `GET /api/events`
-- `GET /api/events-light`
-- `GET /api/event-statistics`
+- `GET /api/events/compact`
+- `GET /api/events/summary`
+- `GET /api/events/coverage`
+- `GET /api/events/search`
 - `GET /api/events/{unified_event_id}`
-- `GET /api/events/{unified_event_id}/sources`
+- `GET /api/events/{unified_event_id}/post-stats`
 - `GET /api/events/{unified_event_id}/top-posts`
 - `GET /api/events/{unified_event_id}/posts`
 - `GET /api/posts/{source_post_id}`
