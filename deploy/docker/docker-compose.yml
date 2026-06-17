@@ -1,9 +1,20 @@
+x-vn-event-dw-base: &vn_event_dw_base
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  image: vn-event-dw-api:latest
+  env_file:
+    - ./pipeline.env
+  environment:
+    SENSOR_TOWER_RAW_DIR: /app/data_ingest/sensortower/raw
+  volumes:
+    - ${HOST_DATA_DIR}:/app/data
+    - ${HOST_INGEST_DIR}:/app/data_ingest
+    - ${HOST_SECRETS_DIR}:/app/secrets:ro
+
 services:
   api:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    image: vn-event-dw-api:latest
+    <<: *vn_event_dw_base
     restart: unless-stopped
     command:
       - vn-event-dw
@@ -14,8 +25,6 @@ services:
       - 0.0.0.0
       - --port
       - "8765"
-    volumes:
-      - ${HOST_DATA_DIR}:/app/data
     ports:
       - "127.0.0.1:${API_PORT:-8765}:8765"
     healthcheck:
@@ -28,6 +37,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  job:
+    <<: *vn_event_dw_base
+    profiles:
+      - ops
+    command:
+      - vn-event-dw
+      - summary
+      - --db
+      - /app/data/warehouse.db
 
   ngrok:
     image: ngrok/ngrok:latest

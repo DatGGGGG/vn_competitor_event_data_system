@@ -1,0 +1,15 @@
+[Unit]
+Description=VN Event DW weekly pipeline
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=__VM_USER__
+Group=__VM_USER__
+WorkingDirectory=/opt/vn_event_dw/vn_competitor_event_data_system
+ExecStart=/opt/vn_event_dw/vn_competitor_event_data_system/deploy/docker/run_vm_pipeline.sh
+
+[Install]
+WantedBy=multi-user.target

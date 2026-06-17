@@ -124,13 +124,22 @@ def _safe_component(value: str) -> str:
     return value.replace("/", "_").replace("\\", "_").replace(":", "_").strip() or "unknown"
 
 
+def _short_component(value: str, *, limit: int = 48) -> str:
+    cleaned = _safe_component(value)
+    if len(cleaned) <= limit:
+        return cleaned
+    digest = hashlib.sha1(cleaned.encode("utf-8")).hexdigest()[:12]
+    head = cleaned[: max(8, limit - 15)]
+    return f"{head}__{digest}"
+
+
 def _target_key(target: SensorTowerTarget) -> str:
     return "__".join(
         (
-            _safe_component(target.unified_app_id),
-            _safe_component(target.os),
-            _safe_component(target.app_id),
-            _safe_component(target.country),
+            _short_component(target.unified_app_id, limit=24),
+            _short_component(target.os, limit=16),
+            _short_component(target.app_id, limit=48),
+            _short_component(target.country, limit=16),
         )
     )
 

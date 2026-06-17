@@ -42,6 +42,48 @@ Main endpoints:
 - `GET /api/events/{unified_event_id}/posts`
 - `GET /api/posts/{source_post_id}`
 
+## Socialdata Exploration
+
+The repo now includes a minimal Socialdata exploration scaffold so we can validate authentication and inspect the GraphQL schema before building automated post ingestion.
+
+Environment variables:
+
+- `SOCIALDATA_BASE_URL`
+- `SOCIALDATA_USESSION`
+- `SOCIALDATA_GOOGLE_ACCESS_TOKEN`
+- `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE`
+- `SOCIALDATA_TIMEOUT_SECONDS`
+- `SOCIALDATA_APP_SLUG`
+
+CLI commands:
+
+```bash
+python -m vn_event_dw.cli socialdata-auth-check --usession <cookie>
+python -m vn_event_dw.cli socialdata-graphql --query "query { __typename }" --usession <cookie>
+python -m vn_event_dw.cli socialdata-introspect --usession <cookie> --output tmp/socialdata_schema.json
+python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --lookback-days 10
+```
+
+Notes:
+
+- `--usession` is the fastest way to test connectivity if you already have a cookie.
+- If you do not have a cookie, the commands can also exchange a Google access token through `--google-access-token` or `SOCIALDATA_GOOGLE_ACCESS_TOKEN`.
+- For unattended VM scheduling, prefer `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE` so the client can mint a fresh Google access token on each run.
+- `sync-socialdata-posts` matches Socialdata channels to your existing `config_app_mapping.fb_page_id` values using the channel `sub` field, then upserts recent posts into `raw_fb_posts`.
+- The weekly sync path uses Socialdata `Post.sub` as `source_post_id`, fetches metrics from `getPost(..., withMetrics: true)`, and applies a small mojibake repair step so Vietnamese text is readable in the warehouse.
+
+Recommended weekly load:
+
+```bash
+python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --lookback-days 10
+```
+
+Recommended first backfill:
+
+```bash
+python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --since 2026-01-01
+```
+
 ## WSL First
 
 This repo is happiest when you run it from WSL Ubuntu, not from a Windows shell.

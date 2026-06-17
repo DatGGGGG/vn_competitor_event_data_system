@@ -1,0 +1,10 @@
+[Unit]
+Description=Run VN Event DW weekly pipeline
+
+[Timer]
+OnCalendar=Mon *-*-* 02:00:00
+Persistent=true
+Unit=vn-event-dw-pipeline.service
+
+[Install]
+WantedBy=timers.target

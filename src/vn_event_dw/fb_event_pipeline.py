@@ -1232,6 +1232,7 @@ def build_fb_events_with_llm_merge(
     game_name: str | None = None,
     page_name: str | None = None,
     limit: int | None = None,
+    progress: Any | None = None,
 ) -> FbLlmMergeStats:
     _ensure_llm_usage_tables(conn)
     llm_client = client or OpenAIFbEventClient()
@@ -1250,8 +1251,22 @@ def build_fb_events_with_llm_merge(
 
     groups = _group_event_objects_for_llm_merge(objects)
     merged_events = 0
+    _emit_progress(
+        progress,
+        f"[fb-events-llm] source_objects={len(objects)} merge_groups={len(groups)} model={llm_client.model}",
+    )
+    started_at = time.monotonic()
 
     for group_index, group in enumerate(groups, start=1):
+        _emit_progress(
+            progress,
+            (
+                "[fb-events-llm] group_start "
+                f"group={group_index}/{len(groups)} "
+                f"game_name={group[0].game_name if group else ''} "
+                f"source_objects={len(group)}"
+            ),
+        )
         payload = {
             "merge_group_id": f"group_{group_index}",
             "game_name": group[0].game_name if group else "",
@@ -1398,7 +1413,36 @@ def build_fb_events_with_llm_merge(
             )
             merged_events += 1
 
+        _emit_progress(
+            progress,
+            (
+                "[fb-events-llm] group_done "
+                f"group={group_index}/{len(groups)} "
+                f"merged_events_so_far={merged_events} "
+                f"{_progress_timing(group_index, len(groups), started_at)}"
+            ),
+        )
+
     conn.commit()
+    _emit_progress(
+        progress,
+        (
+            "[fb-events-llm] completed "
+            f"merge_groups={len(groups)} "
+            f"merged_events={merged_events} "
+            f"source_objects={len(objects)} "
+            f"{_progress_timing(len(groups), len(groups), started_at)}"
+        ),
+    )
+    input_tokens, cached_input_tokens, output_tokens, total_cost_usd = _llm_usage_totals_for_session(conn, session_id)
+    if groups:
+        _emit_progress(
+            progress,
+            "[fb-events-llm] usage "
+            f"session_id={session_id} input_tokens={input_tokens} "
+            f"cached_input_tokens={cached_input_tokens} output_tokens={output_tokens} "
+            f"estimated_cost_usd={total_cost_usd:.4f}",
+        )
     return FbLlmMergeStats(
         merge_groups=len(groups),
         merged_events=merged_events,
@@ -1555,6 +1599,7 @@ def build_fb_events(
     fb_page_id: str | None = None,
     game_name: str | None = None,
     page_name: str | None = None,
+    progress: Any | None = None,
 ) -> FbEventBuildStats:
     _ensure_llm_usage_tables(conn)
     llm_client = client or OpenAIFbEventClient()
@@ -1567,8 +1612,13 @@ def build_fb_events(
     judged_pairs = 0
     processed_at = _utc_now_iso()
     pair_results: list[tuple[str, dict[str, Any], EventObjectRow, EventObjectRow]] = []
+    started_at = time.monotonic()
+    _emit_progress(
+        progress,
+        f"[fb-events] source_objects={len(objects)} candidate_pairs={len(candidate_pairs)} model={llm_client.model}",
+    )
 
-    for left, right in candidate_pairs:
+    for pair_index, (left, right) in enumerate(candidate_pairs, start=1):
         name_similarity = _token_set_ratio(left.event_name, right.event_name)
         description_similarity = _token_set_ratio(left.event_description, right.event_description)
         date_similarity = _date_similarity(
@@ -1686,11 +1736,22 @@ def build_fb_events(
             ),
         )
         pair_results.append((pair_id, judge_payload, left, right))
+        if pair_index % PROGRESS_LOG_EVERY == 0:
+            _emit_progress(
+                progress,
+                (
+                    "[fb-events] pair_progress "
+                    f"processed_pairs={pair_index}/{len(candidate_pairs)} "
+                    f"llm_judged_pairs={judged_pairs} "
+                    f"{_progress_timing(pair_index, len(candidate_pairs), started_at)}"
+                ),
+            )
 
     conn.execute("DELETE FROM fb_events")
 
     if not objects:
         conn.commit()
+        _emit_progress(progress, "[fb-events] no event objects found for the requested scope")
         return FbEventBuildStats(candidate_pairs=0, judged_pairs=judged_pairs, fb_events=0)
 
     union_find = _UnionFind([row.event_object_id for row in objects])
@@ -1772,6 +1833,26 @@ def build_fb_events(
         fb_events_created += 1
 
     conn.commit()
+    _emit_progress(
+        progress,
+        (
+            "[fb-events] completed "
+            f"candidate_pairs={len(candidate_pairs)} "
+            f"llm_judged_pairs={judged_pairs} "
+            f"fb_events={fb_events_created} "
+            f"clusters={len(clusters)} "
+            f"{_progress_timing(len(candidate_pairs), len(candidate_pairs), started_at)}"
+        ),
+    )
+    input_tokens, cached_input_tokens, output_tokens, total_cost_usd = _llm_usage_totals_for_session(conn, session_id)
+    if judged_pairs:
+        _emit_progress(
+            progress,
+            "[fb-events] usage "
+            f"session_id={session_id} input_tokens={input_tokens} "
+            f"cached_input_tokens={cached_input_tokens} output_tokens={output_tokens} "
+            f"estimated_cost_usd={total_cost_usd:.4f}",
+        )
     return FbEventBuildStats(
         candidate_pairs=len(candidate_pairs),
         judged_pairs=judged_pairs,

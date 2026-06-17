@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from datetime import date
 from pathlib import Path
@@ -30,6 +31,8 @@ from .sensortower_raw import (
     resolve_raw_window,
     resolve_tracked_targets,
 )
+from .socialdata import SocialDataClient, read_graphql_variables, read_query_text
+from .socialdata_sync import DEFAULT_SOCIALDATA_PAGE_SIZE, sync_socialdata_posts
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -210,6 +213,204 @@ def build_parser() -> argparse.ArgumentParser:
     summary_parser = subparsers.add_parser("summary", help="Print warehouse table counts")
     summary_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
 
+    socialdata_auth_parser = subparsers.add_parser(
+        "socialdata-auth-check",
+        help="Verify Socialdata authentication by calling a minimal GraphQL query.",
+    )
+    socialdata_auth_parser.add_argument(
+        "--socialdata-base-url",
+        default=None,
+        help="Optional Socialdata base URL. Defaults to SOCIALDATA_BASE_URL or https://socialdata.garena.vn.",
+    )
+    socialdata_auth_parser.add_argument(
+        "--usession",
+        default=None,
+        help="Optional existing Socialdata usession cookie value. Falls back to SOCIALDATA_USESSION.",
+    )
+    socialdata_auth_parser.add_argument(
+        "--google-access-token",
+        default=None,
+        help="Optional Google access token used to exchange for a Socialdata usession cookie.",
+    )
+    socialdata_auth_parser.add_argument(
+        "--google-service-account-file",
+        default=None,
+        help=(
+            "Optional Google service-account JSON credential file used to mint a short-lived access token "
+            "for Socialdata auth. Falls back to SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+    socialdata_auth_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
+    )
+
+    socialdata_graphql_parser = subparsers.add_parser(
+        "socialdata-graphql",
+        help="Run an arbitrary authenticated Socialdata GraphQL query.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--socialdata-base-url",
+        default=None,
+        help="Optional Socialdata base URL. Defaults to SOCIALDATA_BASE_URL or https://socialdata.garena.vn.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--usession",
+        default=None,
+        help="Optional existing Socialdata usession cookie value. Falls back to SOCIALDATA_USESSION.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--google-access-token",
+        default=None,
+        help="Optional Google access token used to exchange for a Socialdata usession cookie.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--google-service-account-file",
+        default=None,
+        help=(
+            "Optional Google service-account JSON credential file used to mint a short-lived access token "
+            "for Socialdata auth. Falls back to SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+    socialdata_graphql_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
+    )
+    socialdata_graphql_parser.add_argument("--query", default=None, help="Inline GraphQL query text.")
+    socialdata_graphql_parser.add_argument("--query-file", type=Path, default=None, help="Path to a GraphQL query file.")
+    socialdata_graphql_parser.add_argument(
+        "--variables-json",
+        default=None,
+        help="Optional JSON object string for GraphQL variables.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--variables-file",
+        type=Path,
+        default=None,
+        help="Optional JSON file containing GraphQL variables.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--operation-name",
+        default=None,
+        help="Optional GraphQL operation name.",
+    )
+    socialdata_graphql_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to write the JSON response.",
+    )
+
+    socialdata_introspect_parser = subparsers.add_parser(
+        "socialdata-introspect",
+        help="Run GraphQL schema introspection against Socialdata.",
+    )
+    socialdata_introspect_parser.add_argument(
+        "--socialdata-base-url",
+        default=None,
+        help="Optional Socialdata base URL. Defaults to SOCIALDATA_BASE_URL or https://socialdata.garena.vn.",
+    )
+    socialdata_introspect_parser.add_argument(
+        "--usession",
+        default=None,
+        help="Optional existing Socialdata usession cookie value. Falls back to SOCIALDATA_USESSION.",
+    )
+    socialdata_introspect_parser.add_argument(
+        "--google-access-token",
+        default=None,
+        help="Optional Google access token used to exchange for a Socialdata usession cookie.",
+    )
+    socialdata_introspect_parser.add_argument(
+        "--google-service-account-file",
+        default=None,
+        help=(
+            "Optional Google service-account JSON credential file used to mint a short-lived access token "
+            "for Socialdata auth. Falls back to SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+    socialdata_introspect_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
+    )
+    socialdata_introspect_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to write the introspection JSON response.",
+    )
+
+    socialdata_sync_parser = subparsers.add_parser(
+        "sync-socialdata-posts",
+        help="Incrementally load FB post metrics from Socialdata into raw_fb_posts.",
+    )
+    socialdata_sync_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    socialdata_sync_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
+    socialdata_sync_parser.add_argument(
+        "--app-slug",
+        default=None,
+        help="Socialdata team/app slug. Defaults to SOCIALDATA_APP_SLUG or srcvn.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--since",
+        type=date.fromisoformat,
+        default=None,
+        help="Optional UTC date cutoff in YYYY-MM-DD format. Overrides --lookback-days.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=None,
+        help="Rolling overlap window in days. Defaults to 10 when --since is omitted.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--unified-app-id",
+        dest="unified_app_ids",
+        action="append",
+        default=None,
+        help="Optional unified_app_id filter. Repeatable.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--per-page",
+        type=int,
+        default=DEFAULT_SOCIALDATA_PAGE_SIZE,
+        help="Socialdata page size for listPost/listChannel requests. Defaults to 100.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--socialdata-base-url",
+        default=None,
+        help="Optional Socialdata base URL. Defaults to SOCIALDATA_BASE_URL or https://socialdata.garena.vn.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--usession",
+        default=None,
+        help="Optional existing Socialdata usession cookie value. Falls back to SOCIALDATA_USESSION.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--google-access-token",
+        default=None,
+        help="Optional Google access token used to exchange for a Socialdata usession cookie.",
+    )
+    socialdata_sync_parser.add_argument(
+        "--google-service-account-file",
+        default=None,
+        help=(
+            "Optional Google service-account JSON credential file used to mint a short-lived access token "
+            "for Socialdata auth. Falls back to SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+    socialdata_sync_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
+    )
+
     return parser
 
 
@@ -218,6 +419,25 @@ def _load_sensortower_token() -> str:
     if not token:
         raise RuntimeError("SENSOR_TOWER_AUTH_TOKEN is missing.")
     return token
+
+
+def _build_socialdata_client(args: argparse.Namespace) -> SocialDataClient:
+    return SocialDataClient(
+        base_url=args.socialdata_base_url,
+        usession=args.usession,
+        google_access_token=args.google_access_token,
+        google_service_account_file=args.google_service_account_file,
+        timeout_seconds=args.timeout_seconds,
+    )
+
+
+def _emit_json_output(payload: dict[str, object], *, output_path: Path | None = None) -> None:
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2)
+    if output_path is not None:
+        output_path.write_text(rendered + "\n", encoding="utf-8")
+        print(f"Wrote JSON response to {output_path}")
+        return
+    print(rendered)
 
 
 def run_sensortower_raw_extract(
@@ -328,6 +548,7 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("fb_event_detection_started")
             stats = build_fb_event_detection(
                 conn,
                 fb_page_id=args.fb_page_id,
@@ -349,6 +570,7 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("fb_event_objects_started")
             stats = build_fb_event_objects(
                 conn,
                 fb_page_id=args.fb_page_id,
@@ -370,6 +592,7 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("fb_raw_events_started")
             stats = build_fb_raw_events(
                 conn,
                 fb_page_id=args.fb_page_id,
@@ -393,11 +616,13 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("fb_events_started")
             stats = build_fb_events(
                 conn,
                 fb_page_id=args.fb_page_id,
                 game_name=args.game_name,
                 page_name=args.page_name,
+                progress=print,
             )
         finally:
             conn.close()
@@ -413,12 +638,14 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("fb_events_llm_started")
             stats = build_fb_events_with_llm_merge(
                 conn,
                 fb_page_id=args.fb_page_id,
                 game_name=args.game_name,
                 page_name=args.page_name,
                 limit=args.limit,
+                progress=print,
             )
         finally:
             conn.close()
@@ -434,6 +661,7 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("unified_events_llm_started")
             stats = build_unified_events_with_llm_merge(
                 conn,
                 unified_app_id=args.unified_app_id,
@@ -455,6 +683,7 @@ def main() -> int:
         conn = open_connection(args.db)
         try:
             init_db(conn)
+            print("unified_step5_rerun_started")
             stats = rerun_unified_step5(
                 conn,
                 unified_app_id=args.unified_app_id,
@@ -542,6 +771,70 @@ def main() -> int:
         summary = summarize_db(args.db)
         for table_name, count in summary.items():
             print(f"{table_name}: {count}")
+        return 0
+
+    if args.command == "socialdata-auth-check":
+        client = _build_socialdata_client(args)
+        auth_check_response = client.auth_check()
+        print("socialdata_auth_check_completed")
+        _emit_json_output(auth_check_response)
+        return 0
+
+    if args.command == "socialdata-graphql":
+        client = _build_socialdata_client(args)
+        query_text = read_query_text(query=args.query, query_file=args.query_file)
+        variables = read_graphql_variables(
+            variables_json=args.variables_json,
+            variables_file=args.variables_file,
+        )
+        response = client.graphql(
+            query=query_text,
+            variables=variables,
+            operation_name=args.operation_name,
+        )
+        _emit_json_output(response, output_path=args.output)
+        return 0
+
+    if args.command == "socialdata-introspect":
+        client = _build_socialdata_client(args)
+        response = client.introspect_schema()
+        _emit_json_output(response, output_path=args.output)
+        return 0
+
+    if args.command == "sync-socialdata-posts":
+        client = _build_socialdata_client(args)
+        stats = sync_socialdata_posts(
+            db_path=args.db,
+            config_path=args.config,
+            client=client,
+            app_slug=args.app_slug,
+            since=args.since,
+            lookback_days=args.lookback_days,
+            unified_app_ids=args.unified_app_ids,
+            per_page=args.per_page,
+            progress=print,
+        )
+        _emit_json_output(
+            {
+                "app_slug": stats.app_slug,
+                "app_id": stats.app_id,
+                "cutoff_iso": stats.cutoff_iso,
+                "matched_channels": stats.matched_channels,
+                "listed_posts": stats.listed_posts,
+                "upserted_posts": stats.upserted_posts,
+                "channel_stats": [
+                    {
+                        "channel_id": item.channel_id,
+                        "fb_page_id": item.fb_page_id,
+                        "channel_name": item.channel_name,
+                        "listed_posts": item.listed_posts,
+                        "upserted_posts": item.upserted_posts,
+                        "stopped_on_cutoff": item.stopped_on_cutoff,
+                    }
+                    for item in stats.channel_stats
+                ],
+            }
+        )
         return 0
 
     parser.error("Unknown command")

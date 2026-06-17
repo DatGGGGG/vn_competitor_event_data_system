@@ -139,6 +139,31 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(args.ngrok_authtoken)
         self.assertIsNone(args.ngrok_domain)
 
+    def test_sync_socialdata_posts_parser_defaults(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "sync-socialdata-posts",
+                "--db",
+                "data/warehouse.db",
+                "--config",
+                "examples/config.json",
+            ]
+        )
+        self.assertEqual(args.command, "sync-socialdata-posts")
+        self.assertEqual(args.db, Path("data/warehouse.db"))
+        self.assertEqual(args.config, Path("examples/config.json"))
+        self.assertIsNone(args.app_slug)
+        self.assertIsNone(args.since)
+        self.assertIsNone(args.lookback_days)
+        self.assertIsNone(args.unified_app_ids)
+        self.assertEqual(args.per_page, 100)
+        self.assertIsNone(args.socialdata_base_url)
+        self.assertIsNone(args.usession)
+        self.assertIsNone(args.google_access_token)
+        self.assertIsNone(args.google_service_account_file)
+        self.assertIsNone(args.timeout_seconds)
+
 
 if __name__ == "__main__":
     unittest.main()

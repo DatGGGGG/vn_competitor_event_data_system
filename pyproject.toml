@@ -9,6 +9,7 @@ description = "Mini event data warehouse with ETL flow"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    "google-auth>=2.0",
     "pyngrok>=8.1",
     "rapidfuzz>=3.0",
     "uvicorn>=0.30",
