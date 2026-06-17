@@ -17,3 +17,7 @@ htmlcov/
 reports/
 *.egg-info/
 deploy/docker/vm.env
+local_secrets/*
+!local_secrets/README.md
+.local_vm/secrets/
+node_modules/

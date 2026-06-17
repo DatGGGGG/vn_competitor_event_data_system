@@ -11,7 +11,8 @@ from urllib import error, parse, request
 
 DEFAULT_SOCIALDATA_BASE_URL = "https://socialdata.garena.vn"
 DEFAULT_TIMEOUT_SECONDS = 60
-DEFAULT_GOOGLE_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+DEFAULT_GOOGLE_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
+DEFAULT_GOOGLE_SCOPES = (DEFAULT_GOOGLE_SCOPE,)
 
 # Standard GraphQL introspection query.
 INTROSPECTION_QUERY = """
@@ -142,6 +143,30 @@ class SocialDataAuthResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SocialDataGoogleAccessTokenResult:
+    service_account_email: str
+    access_token: str
+    expiry_iso: str | None = None
+    google_scopes: tuple[str, ...] = DEFAULT_GOOGLE_SCOPES
+
+
+@dataclass(frozen=True, slots=True)
+class SocialDataGoogleTokenExchangeDebugResult:
+    token_source: str
+    service_account_email: str | None
+    google_scopes: tuple[str, ...] | None
+    access_token_length: int
+    access_token_prefix: str
+    access_token_suffix: str
+    exchange_endpoint: str
+    http_status: int
+    response_body: str | None
+    set_cookie_headers: tuple[str, ...]
+    location: str | None
+    usession: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SocialDataConfig:
     base_url: str
     graphql_url: str
@@ -149,6 +174,7 @@ class SocialDataConfig:
     usession: str | None = None
     google_access_token: str | None = None
     google_service_account_file: str | None = None
+    google_scopes: tuple[str, ...] = DEFAULT_GOOGLE_SCOPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,12 +232,29 @@ def _load_json_value(raw: str | None) -> dict[str, Any] | None:
     return loaded
 
 
+def _parse_google_scopes(scopes: str | list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    if scopes is None:
+        raw_scopes = _normalize_text(os.getenv("SOCIALDATA_GOOGLE_SCOPES"))
+        if not raw_scopes:
+            return DEFAULT_GOOGLE_SCOPES
+        scopes = raw_scopes
+    if isinstance(scopes, str):
+        candidates = scopes.replace(",", " ").split()
+    else:
+        candidates = []
+        for scope in scopes:
+            candidates.extend(scope.replace(",", " ").split())
+    resolved = tuple(dict.fromkeys(scope.strip() for scope in candidates if scope.strip()))
+    return resolved or DEFAULT_GOOGLE_SCOPES
+
+
 def load_socialdata_config(
     *,
     base_url: str | None = None,
     usession: str | None = None,
     google_access_token: str | None = None,
     google_service_account_file: str | None = None,
+    google_scopes: str | list[str] | tuple[str, ...] | None = None,
     timeout_seconds: int | None = None,
 ) -> SocialDataConfig:
     resolved_base = (
@@ -232,6 +275,7 @@ def load_socialdata_config(
             _normalize_text(google_service_account_file)
             or _normalize_text(os.getenv("SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE"))
         ),
+        google_scopes=_parse_google_scopes(google_scopes),
     )
 
 
@@ -242,6 +286,14 @@ def parse_usession_from_set_cookie(set_cookie_headers: list[str] | tuple[str, ..
         if "usession" in cookie:
             return cookie["usession"].value
     raise RuntimeError("Socialdata auth response did not include a usession cookie.")
+
+
+def _token_prefix(token: str, *, width: int = 16) -> str:
+    return token[:width]
+
+
+def _token_suffix(token: str, *, width: int = 16) -> str:
+    return token[-width:] if len(token) > width else token
 
 
 class _NoRedirectHandler(request.HTTPRedirectHandler):
@@ -257,6 +309,7 @@ class SocialDataClient:
         usession: str | None = None,
         google_access_token: str | None = None,
         google_service_account_file: str | None = None,
+        google_scopes: str | list[str] | tuple[str, ...] | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
         self.config = load_socialdata_config(
@@ -264,6 +317,7 @@ class SocialDataClient:
             usession=usession,
             google_access_token=google_access_token,
             google_service_account_file=google_service_account_file,
+            google_scopes=google_scopes,
             timeout_seconds=timeout_seconds,
         )
 
@@ -276,10 +330,14 @@ class SocialDataClient:
             base_url=self.config.base_url,
             usession=usession,
             google_service_account_file=self.config.google_service_account_file,
+            google_scopes=self.config.google_scopes,
             timeout_seconds=self.config.timeout_seconds,
         )
 
     def refresh_google_access_token_from_service_account(self) -> str:
+        return self.mint_google_access_token_from_service_account().access_token
+
+    def mint_google_access_token_from_service_account(self) -> SocialDataGoogleAccessTokenResult:
         service_account_file = self.config.google_service_account_file
         if not service_account_file:
             raise RuntimeError(
@@ -302,7 +360,7 @@ class SocialDataClient:
 
         credentials = service_account.Credentials.from_service_account_file(
             credential_path,
-            scopes=[DEFAULT_GOOGLE_SCOPE],
+            scopes=list(self.config.google_scopes),
         )
         credentials.refresh(Request())
         token = _normalize_text(credentials.token)
@@ -310,13 +368,83 @@ class SocialDataClient:
             raise RuntimeError(
                 "Google service-account authentication completed, but no access token was returned."
             )
-        return token
+        expiry_iso = credentials.expiry.isoformat() if credentials.expiry is not None else None
+        return SocialDataGoogleAccessTokenResult(
+            service_account_email=str(credentials.service_account_email),
+            access_token=token,
+            expiry_iso=expiry_iso,
+            google_scopes=self.config.google_scopes,
+        )
 
     def resolve_google_access_token(self, access_token: str | None = None) -> str:
         token = _normalize_text(access_token) or self.config.google_access_token
         if token:
             return token
         return self.refresh_google_access_token_from_service_account()
+
+    def debug_google_token_exchange(
+        self,
+        access_token: str | None = None,
+    ) -> SocialDataGoogleTokenExchangeDebugResult:
+        explicit_token = _normalize_text(access_token) or self.config.google_access_token
+        service_account_email: str | None = None
+        token_source = "explicit_access_token"
+        if explicit_token:
+            token = explicit_token
+        else:
+            minted = self.mint_google_access_token_from_service_account()
+            token = minted.access_token
+            service_account_email = minted.service_account_email
+            google_scopes: tuple[str, ...] | None = minted.google_scopes
+            token_source = "service_account_file"
+        if explicit_token:
+            google_scopes = None
+
+        exchange_endpoint = f"{self.config.base_url}/connect/google/callback"
+        exchange_url = f"{exchange_endpoint}?{parse.urlencode({'access_token': token})}"
+        req = request.Request(exchange_url, method="GET")
+        opener = request.build_opener(_NoRedirectHandler)
+
+        http_status = 0
+        response_body: str | None = None
+        set_cookie_headers: tuple[str, ...] = ()
+        location: str | None = None
+        try:
+            with opener.open(req, timeout=self.config.timeout_seconds) as response:
+                http_status = getattr(response, "status", 200)
+                set_cookie_headers = tuple(response.headers.get_all("Set-Cookie") or ())
+                location = response.headers.get("Location")
+                try:
+                    response_body = response.read().decode("utf-8", errors="replace")
+                except Exception:
+                    response_body = None
+        except error.HTTPError as exc:
+            http_status = exc.code
+            response_body = exc.read().decode("utf-8", errors="replace")
+            set_cookie_headers = tuple(exc.headers.get_all("Set-Cookie") or ())
+            location = exc.headers.get("Location")
+        except error.URLError as exc:
+            response_body = str(exc.reason)
+
+        try:
+            usession = parse_usession_from_set_cookie(set_cookie_headers)
+        except RuntimeError:
+            usession = None
+
+        return SocialDataGoogleTokenExchangeDebugResult(
+            token_source=token_source,
+            service_account_email=service_account_email,
+            google_scopes=google_scopes,
+            access_token_length=len(token),
+            access_token_prefix=_token_prefix(token),
+            access_token_suffix=_token_suffix(token),
+            exchange_endpoint=exchange_endpoint,
+            http_status=http_status,
+            response_body=response_body,
+            set_cookie_headers=set_cookie_headers,
+            location=location,
+            usession=usession,
+        )
 
     def exchange_google_access_token(self, access_token: str | None = None) -> SocialDataAuthResult:
         token = self.resolve_google_access_token(access_token)
