@@ -12,6 +12,7 @@ dependencies = [
     "google-auth>=2.0",
     "pyngrok>=8.1",
     "rapidfuzz>=3.0",
+    "requests>=2.31",
     "uvicorn>=0.30",
 ]
 
