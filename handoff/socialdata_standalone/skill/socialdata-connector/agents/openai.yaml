@@ -1,0 +1,4 @@
+interface:
+  display_name: "Socialdata Connector"
+  short_description: "Standalone Socialdata auth and GraphQL access"
+  default_prompt: "Use $socialdata-connector to connect to Socialdata from this standalone handoff package."

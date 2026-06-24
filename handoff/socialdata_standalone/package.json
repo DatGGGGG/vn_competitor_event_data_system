@@ -1,0 +1,13 @@
+{
+  "name": "socialdata-standalone-handoff",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone Socialdata auth handoff package",
+  "type": "module",
+  "scripts": {
+    "mint-token": "node ./socialdata_mint_google_access_token.mjs"
+  },
+  "dependencies": {
+    "google-auth-library": "^9.15.1"
+  }
+}

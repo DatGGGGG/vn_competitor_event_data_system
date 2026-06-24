@@ -1,0 +1,4 @@
+interface:
+  display_name: "Socialdata Connector"
+  short_description: "Reuse Socialdata auth, GraphQL, and sync flow"
+  default_prompt: "Use $socialdata-connector to guide Socialdata setup or reuse the existing connector in this repo."

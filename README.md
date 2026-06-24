@@ -46,6 +46,13 @@ Main endpoints:
 
 The repo now includes a minimal Socialdata exploration scaffold so we can validate authentication and inspect the GraphQL schema before building automated post ingestion.
 
+Guides:
+
+- [Socialdata guide for non-technical users (VI)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_huong_dan_nguoi_dung_vi.md)
+- [Socialdata guide for Claude/Codex (VI)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_huong_dan_agent_vi.md)
+- [Socialdata connector handoff](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_connector_handoff.md)
+- [Claude prompt for Socialdata connector reuse](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_connector_claude_prompt.md)
+
 Environment variables:
 
 - `SOCIALDATA_BASE_URL`
