@@ -21,3 +21,4 @@ local_secrets/*
 !local_secrets/README.md
 .local_vm/secrets/
 node_modules/
+handoff/*.rar
