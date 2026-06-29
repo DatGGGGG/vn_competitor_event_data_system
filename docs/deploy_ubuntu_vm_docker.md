@@ -25,6 +25,7 @@ Note:
 - [run_vm_pipeline.sh](/C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/deploy/docker/run_vm_pipeline.sh)
 - [vn-event-dw-pipeline.service.example](/C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/deploy/docker/vn-event-dw-pipeline.service.example)
 - [vn-event-dw-pipeline.timer.example](/C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/deploy/docker/vn-event-dw-pipeline.timer.example)
+- [vn-event-dw-pipeline.cron.example](/C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/deploy/docker/vn-event-dw-pipeline.cron.example)
 
 ## Recommended VM Layout
 
@@ -144,6 +145,9 @@ OPENAI_MODEL=gpt-5.4-nano
 OPENAI_UNIFIED_EVENT_MERGE_MODEL=gpt-5.4
 SOCIALDATA_SYNC_LOOKBACK_DAYS=10
 SENSORTOWER_SYNC_LOOKBACK_DAYS=3
+PIPELINE_VERIFY_API=1
+PIPELINE_VERIFY_DB=1
+PIPELINE_API_HEALTH_TIMEOUT_SECONDS=180
 ```
 
 Notes:
@@ -152,6 +156,8 @@ Notes:
 - `SOCIALDATA_GOOGLE_SCOPES` should include `https://www.googleapis.com/auth/userinfo.email` so Socialdata can identify the granted service-account email.
 - `SOCIALDATA_USESSION` and `SOCIALDATA_GOOGLE_ACCESS_TOKEN` are optional manual fallbacks, but both expire.
 - `PIPELINE_UNIFIED_MONTHS` can stay blank. The VM pipeline script will then rebuild the previous month and current month automatically.
+- `PIPELINE_VERIFY_API=1` waits for the API container to become healthy after the restart step.
+- `PIPELINE_VERIFY_DB=1` prints a DB freshness summary and fails the run if the rebuilt months are missing from `unified_events`.
 
 ## 6. Start the Stack
 
@@ -195,6 +201,8 @@ The repo includes a VM-side wrapper script that runs:
 - `load-sensortower-raw`
 - `build-unified-events-llm` for the previous month and current month
 - `docker compose restart api`
+- API health verification
+- DB freshness verification for the rebuilt months
 
 Run it:
 
@@ -235,6 +243,21 @@ Run the service once on demand:
 ```bash
 sudo systemctl start vn-event-dw-pipeline.service
 sudo journalctl -u vn-event-dw-pipeline.service -n 200 --no-pager
+```
+
+## 11. Optional Weekly Cron Instead of systemd
+
+If you prefer `cron`, the repo includes a ready-to-paste example:
+
+```bash
+cat deploy/docker/vn-event-dw-pipeline.cron.example
+crontab -e
+```
+
+That example runs the pipeline every Monday at `02:00 UTC` and appends logs to:
+
+```bash
+/opt/vn_event_dw/pipeline-cron.log
 ```
 
 ## Update Flow

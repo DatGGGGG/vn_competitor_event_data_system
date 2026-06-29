@@ -1,0 +1,9 @@
+# Weekly VN Event DW pipeline via cron
+#
+# Install with:
+#   crontab -e
+# Then paste the command below.
+#
+# Runs every Monday at 02:00 UTC and appends logs to the VM host.
+
+0 2 * * 1 cd /opt/vn_event_dw/vn_competitor_event_data_system && /opt/vn_event_dw/vn_competitor_event_data_system/deploy/docker/run_vm_pipeline.sh >> /opt/vn_event_dw/pipeline-cron.log 2>&1
