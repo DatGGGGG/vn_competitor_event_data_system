@@ -1,34 +1,101 @@
-# Mini Event Data Warehouse
+# VN Competitor Event Data System
 
-This project is a compact event-focused data warehouse with full ETL flow:
+This repository is the event warehouse and read API for tracking game events across:
 
-- `Extract` from CSV landing files and a JSON config file
-- `Extract` raw Sensor Tower JSON snapshots for tracked `unified_app_id` targets
-- `Transform` into deterministic warehouse tables
-- `Load` Sensor Tower app-update events for downstream analysis
-- `Analyze` monthly cross-source evidence into unified business-level game events
+- Facebook post data from Socialdata
+- Sensor Tower raw app-update / version data
+- an LLM-based merge layer that turns source evidence into unified business events
 
-It is intentionally small, but the structure mirrors a production warehouse:
+It is designed to support two main use cases:
 
-- `config_app_mapping` acts as the unified app/page mapping dimension
-- `raw_*` tables are immutable landing tables
-- `st_app_update_events` stores deterministic Sensor Tower app-update events
-- `post_event_detection` and `post_event_objects` remain available as legacy/debug FB pipeline tables
-- `unified_events` and `unified_event_sources` store the final cross-source merged event layer
-- `data_ingest/sensortower/raw` stores replayable raw Sensor Tower snapshots and manifests
+1. operate a continuously refreshed warehouse on an Ubuntu VM
+2. expose a lightweight public API for agents, analysts, and internal tools
 
-## API Docs
+## What This System Does
 
-The project also exposes a small read-only event lookup API.
+At a high level, the system:
 
-Documentation:
+1. maps tracked games and Facebook pages in `config_app_mapping`
+2. ingests raw Facebook posts into `raw_fb_posts`
+3. ingests replayable Sensor Tower snapshots into `data_ingest/sensortower/raw`
+4. loads deterministic Sensor Tower events into warehouse tables
+5. builds monthly `unified_events` and `unified_event_sources`
+6. serves a read-only event lookup API on top of the warehouse
 
-- [Event Lookup API](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/api.md)
-- [Event Lookup API Technical Spec](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/api_technical_spec.md)
-- [Ubuntu VM Deployment](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm.md)
-- [Ubuntu VM Deployment (Docker Compose)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/deploy_ubuntu_vm_docker.md)
+## Documentation Map
 
-Main endpoints:
+Start here depending on your goal:
+
+- Full system handbook:
+  - [System Manual](./docs/system_manual.md)
+- API:
+  - [Event Lookup API](./docs/api.md)
+  - [Event Lookup API Technical Spec](./docs/api_technical_spec.md)
+- Deployment:
+  - [Ubuntu VM Deployment](./docs/deploy_ubuntu_vm.md)
+  - [Ubuntu VM Deployment (Docker Compose)](./docs/deploy_ubuntu_vm_docker.md)
+- Socialdata setup:
+  - [Socialdata guide for non-technical users (VI)](./docs/socialdata_huong_dan_nguoi_dung_vi.md)
+  - [Socialdata guide for Claude/Codex (VI)](./docs/socialdata_huong_dan_agent_vi.md)
+  - [Socialdata connector handoff](./docs/socialdata_connector_handoff.md)
+  - [Claude prompt for Socialdata connector reuse](./docs/socialdata_connector_claude_prompt.md)
+
+## Current Recommended Operating Mode
+
+The recommended production setup is:
+
+- Ubuntu VM
+- Docker Compose deployment
+- SQLite database stored on the VM host
+- Socialdata sync via Google service-account authentication
+- Sensor Tower sync via API token
+- unified-event build via Compass Gateway / OpenAI-compatible API
+- weekly scheduled refresh on the VM
+
+The current VM-side pipeline wrapper:
+
+- syncs Socialdata posts
+- syncs Sensor Tower raw snapshots
+- loads pending Sensor Tower raw manifests
+- rebuilds the previous month and current month
+- restarts the API
+- verifies API health and DB freshness
+
+## System Architecture
+
+### Core Warehouse Layers
+
+- `config_app_mapping`
+  - source-of-truth mapping from tracked Facebook pages to `unified_app_id`
+- `raw_fb_posts`
+  - landing table for Facebook posts and metrics
+- `raw_st_app_update`
+  - raw Sensor Tower app-update snapshots
+- `raw_st_version`
+  - raw Sensor Tower version snapshots
+- `st_app_update_events`
+  - deterministic Sensor Tower app-update events
+- `st_version_events`
+  - deterministic Sensor Tower version events
+- `post_event_detection`
+  - legacy/debug FB detection layer
+- `post_event_objects`
+  - legacy/debug FB extracted event layer
+- `unified_events`
+  - final monthly event layer
+- `unified_event_sources`
+  - lineage links from unified events back to FB posts and Sensor Tower evidence
+
+### Runtime Components
+
+- `api`
+  - serves the read-only event API
+- `ngrok`
+  - exposes the API publicly
+- `job`
+  - reusable Compose profile for ETL / sync / rebuild commands
+
+## Main API Endpoints
 
 - `GET /api/games`
 - `GET /api/events`
@@ -42,85 +109,14 @@ Main endpoints:
 - `GET /api/events/{unified_event_id}/posts`
 - `GET /api/posts/{source_post_id}`
 
-## Socialdata Exploration
+Use the detailed API docs for request / response contracts:
 
-The repo now includes a minimal Socialdata exploration scaffold so we can validate authentication and inspect the GraphQL schema before building automated post ingestion.
-
-Guides:
-
-- [Socialdata guide for non-technical users (VI)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_huong_dan_nguoi_dung_vi.md)
-- [Socialdata guide for Claude/Codex (VI)](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_huong_dan_agent_vi.md)
-- [Socialdata connector handoff](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_connector_handoff.md)
-- [Claude prompt for Socialdata connector reuse](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/docs/socialdata_connector_claude_prompt.md)
-
-Environment variables:
-
-- `SOCIALDATA_BASE_URL`
-- `SOCIALDATA_USESSION`
-- `SOCIALDATA_GOOGLE_ACCESS_TOKEN`
-- `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE`
-- `SOCIALDATA_GOOGLE_SCOPES`
-- `SOCIALDATA_TIMEOUT_SECONDS`
-- `SOCIALDATA_APP_SLUG`
-
-CLI commands:
-
-```bash
-python -m vn_event_dw.cli socialdata-mint-google-access-token --google-service-account-file /path/to/service-account.json
-python -m vn_event_dw.cli socialdata-mint-google-access-token --google-service-account-file /path/to/service-account.json --token-only
-python -m vn_event_dw.cli socialdata-auth-check --usession <cookie>
-python -m vn_event_dw.cli socialdata-graphql --query "query { __typename }" --usession <cookie>
-python -m vn_event_dw.cli socialdata-introspect --usession <cookie> --output tmp/socialdata_schema.json
-python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --lookback-days 10
-```
-
-Notes:
-
-- `socialdata-mint-google-access-token` is useful when you want to follow the Socialdata manual callback steps yourself before involving the rest of the pipeline.
-- Service-account token minting defaults to `https://www.googleapis.com/auth/userinfo.email`, because Socialdata needs the Google token to expose the granted service-account email.
-- Use repeatable `--google-scope` or `SOCIALDATA_GOOGLE_SCOPES` only for debugging alternate Google token scopes.
-- Use `--token-only` when you want to paste the token directly into `curl` or another manual callback check.
-- `--usession` is the fastest way to test connectivity if you already have a cookie.
-- If you do not have a cookie, the commands can also exchange a Google access token through `--google-access-token` or `SOCIALDATA_GOOGLE_ACCESS_TOKEN`.
-- For unattended VM scheduling, prefer `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE` so the client can mint a fresh Google access token on each run.
-- `sync-socialdata-posts` matches Socialdata channels to your existing `config_app_mapping.fb_page_id` values using the channel `sub` field, then upserts recent posts into `raw_fb_posts`.
-- The weekly sync path uses Socialdata `Post.sub` as `source_post_id`, fetches metrics from `getPost(..., withMetrics: true)`, and applies a small mojibake repair step so Vietnamese text is readable in the warehouse.
-
-Recommended weekly load:
-
-```bash
-python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --lookback-days 10
-```
-
-Recommended first backfill:
-
-```bash
-python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --since 2026-01-01
-```
-
-## WSL First
-
-This repo is happiest when you run it from WSL Ubuntu, not from a Windows shell.
-
-Recommended layout:
-
-- clone or copy the repo into your Linux home directory, for example `~/code/vn_competitor_event_data_system`
-- create a virtual environment there
-- keep the working tree on the Linux filesystem instead of `/mnt/c/...` if you can
-
-Basic WSL setup:
-
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip
-cd ~/code/vn_competitor_event_data_system
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-cp .env.example .env
-```
+- [Event Lookup API](./docs/api.md)
+- [Event Lookup API Technical Spec](./docs/api_technical_spec.md)
 
 ## Quick Start
+
+### Local Python Flow
 
 ```bash
 python3 -m venv .venv
@@ -134,134 +130,262 @@ python -m vn_event_dw.cli build-unified-events-llm --db data/warehouse.db
 python -m vn_event_dw.cli summary --db data/warehouse.db
 ```
 
-## Project Layout
+### Local API
 
-- `examples/` sample inputs
-- `examples/fb_posts/` drop folder for many FB post CSV files
-- `src/vn_event_dw/` ETL and warehouse code
-- `.env.example` sample environment variables for local development
-- `.gitignore` ignores local virtualenvs, caches, and generated raw data
+```bash
+python -m vn_event_dw.cli serve-api --db data/warehouse.db
+```
 
-## Sensor Tower Raw Layer
+### VM Docker Flow
 
-The raw Sensor Tower extractor uses the `sensortower_targets` section in `examples/config.json`.
+See:
 
-Each target entry should include:
+- [Ubuntu VM Deployment (Docker Compose)](./docs/deploy_ubuntu_vm_docker.md)
 
-- `unified_app_id`
-- `os`
-- `app_id`
-- `country`
+## Main CLI Workflows
 
-You also need `SENSOR_TOWER_AUTH_TOKEN` set in your environment before running the raw fetch command.
-You can copy `.env.example` to `.env` and fill it in for local development.
+### 1. Socialdata Post Sync
 
-For the unified cross-source LLM pipeline you also need:
+Recommended weekly overlap load:
 
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `OPENAI_PROVIDER`
-- `OPENAI_MODEL`
-  - Compass `/v1/responses` example: `gpt-5.4-nano`
-- `OPENAI_UNIFIED_EVENT_MERGE_MODEL`
-  - Compass `/v1/responses` example: `gpt-5.4-mini`
+```bash
+python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --lookback-days 10
+```
 
-Raw snapshots are written under:
+First backfill from a date:
 
-- `data_ingest/sensortower/raw`
+```bash
+python -m vn_event_dw.cli sync-socialdata-posts --db data/warehouse.db --config examples/config.json --since 2026-01-01
+```
 
-Run the daily raw extract with overlap:
+What it does:
+
+- resolves the Socialdata app by slug
+- matches Socialdata channels to `config_app_mapping.fb_page_id`
+- fetches post lists and post metrics
+- upserts posts into `raw_fb_posts`
+
+### 2. Sensor Tower Raw Sync
+
+Incremental overlap load:
 
 ```bash
 python -m vn_event_dw.cli sync-sensortower-raw --config examples/config.json --lookback-days 3
 ```
 
-Backfill from a specific date:
+Backfill from a date:
 
 ```bash
 python -m vn_event_dw.cli sync-sensortower-raw --config examples/config.json --since 2025-01-01
 ```
 
-Load any pending raw manifests into the warehouse:
+Load raw manifests into the warehouse:
 
 ```bash
 python -m vn_event_dw.cli load-sensortower-raw --db data/warehouse.db
 ```
 
-## FB Post Folder
+### 3. Unified Event Build
 
-Put FB post CSV files in `examples/fb_posts/` and run the ETL with `--input-dir examples`.
-
-The loader will scan that folder recursively, so you can keep files grouped by game, period, or source.
-
-The loader accepts either the simple four-column format or richer export headers like:
-
-- `source_post_id`
-- `fb_page_id`
-- `post_time`
-- `post_content`
-
-The raw landing table stores the richer FB fields directly:
-
-- `channel_id`
-- `channel_name`
-- `post_type`
-- `post_description`
-- `duration`
-- `link`
-- `publish_time`
-- `hashtag`
-- `engagement`
-- `reaction`
-- `comment`
-- `share`
-- `view`
-
-It also recognizes these aliases from the export files you pasted:
-
-- `Post id` -> `source_post_id`
-- `Channel id` -> `fb_page_id`
-- `Publish time` -> `post_time`
-- `Post description` -> `post_content`
-- `Link` is used as a fallback when `Post description` is blank
-
-If `examples/fb_posts/` does not exist, the ETL still supports the old `examples/fb_posts.csv` single-file layout.
-
-To rebuild only the FB landing tables without touching Sensor Tower data, use:
-
-```bash
-python -m vn_event_dw.cli reload-fb-posts --db data/warehouse.db --config examples/config.json --input-dir examples
-```
-
-To build the final monthly unified event layer directly from `raw_fb_posts` plus Sensor Tower deterministic events, run:
+Build the final cross-source monthly event layer:
 
 ```bash
 python -m vn_event_dw.cli build-unified-events-llm --db data/warehouse.db
 ```
 
-Model defaults:
+Or a specific month:
 
-- `OPENAI_UNIFIED_EVENT_MERGE_MODEL=gpt-5.4-mini` for final cross-source merge
-- `OPENAI_MODEL=gpt-5.4-nano` remains available only for the older FB step-1 debug pipeline
+```bash
+python -m vn_event_dw.cli build-unified-events-llm --db data/warehouse.db --month 2026-07
+```
 
-## How It Maps To Your Diagram
+### 4. VM Scheduled Pipeline
 
-The diagram can be implemented as:
+On the VM, the wrapper script is:
 
-- `Config` -> `config_app_mapping`
-- `FB Posts (csv, raw)` -> `raw_fb_posts`
-- `FB post event detection (legacy/debug)` -> `post_event_detection`
-- `FB extracted event objects (legacy/debug)` -> `post_event_objects`
-- `ST_APP_UPDATE` -> `raw_st_app_update`
-- `ST_VERSION` -> `raw_st_version`
-- `Deterministic ST updates` -> `st_app_update_events`
-- `Deterministic ST versions` -> `st_version_events`
-- `Unified final events` -> `unified_events`
-- `Unified event lineage` -> `unified_event_sources`
+```bash
+./deploy/docker/run_vm_pipeline.sh
+```
 
-If you want, we can extend this next with:
+Its default behavior is:
 
-- incremental loading and watermarks
-- SCD Type 2 dimensions
-- a richer rule engine
-- dbt-style transformations
+- Socialdata overlap sync
+- Sensor Tower overlap sync
+- Sensor Tower raw load
+- rebuild previous month + current month
+- restart API
+- verify API health
+- verify DB freshness
+
+## Required Runtime Secrets
+
+### Socialdata
+
+- `SOCIALDATA_BASE_URL`
+- `SOCIALDATA_TIMEOUT_SECONDS`
+- `SOCIALDATA_APP_SLUG`
+- `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE`
+- `SOCIALDATA_GOOGLE_SCOPES`
+- optional fallback:
+  - `SOCIALDATA_USESSION`
+  - `SOCIALDATA_GOOGLE_ACCESS_TOKEN`
+
+Important:
+
+- service-account token minting should use:
+  - `https://www.googleapis.com/auth/userinfo.email`
+- this is required so Socialdata can map the Google token to the granted service-account email
+
+### Sensor Tower
+
+- `SENSOR_TOWER_AUTH_TOKEN`
+- optional:
+  - `SENSOR_TOWER_BASE_URL`
+
+### Compass / OpenAI-Compatible LLM
+
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL`
+- `OPENAI_PROVIDER`
+- `OPENAI_MODEL`
+- `OPENAI_UNIFIED_EVENT_MERGE_MODEL`
+- optional:
+  - `OPENAI_FB_MERGE_MODEL`
+  - `OPENAI_TIMEOUT_SECONDS`
+  - `OPENAI_MAX_RETRIES`
+
+## Recommended Schedules
+
+### VM Weekly Refresh
+
+The repo includes a cron example:
+
+- [deploy/docker/vn-event-dw-pipeline.cron.example](./deploy/docker/vn-event-dw-pipeline.cron.example)
+
+Current schedule pattern:
+
+- every Monday
+- `02:00 UTC`
+- intended to rebuild:
+  - previous month
+  - current month
+
+### Default Overlap Windows
+
+- `SOCIALDATA_SYNC_LOOKBACK_DAYS=10`
+- `SENSORTOWER_SYNC_LOOKBACK_DAYS=3`
+
+These are overlap windows, not full-history rebuilds.
+
+## Common Operations
+
+### Check latest raw FB freshness
+
+```bash
+sudo docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml --profile ops run --rm --no-deps job \
+python - <<'PY'
+import sqlite3
+conn = sqlite3.connect("/app/data/warehouse.db")
+row = conn.execute("""
+SELECT
+  MAX(publish_time) AS latest_publish_time,
+  MAX(ingested_at) AS latest_ingested_at,
+  COUNT(*) AS raw_fb_post_rows
+FROM raw_fb_posts
+""").fetchone()
+print("latest_publish_time:", row[0])
+print("latest_ingested_at:", row[1])
+print("raw_fb_post_rows:", row[2])
+PY
+```
+
+More verification commands are in:
+
+- [System Manual](./docs/system_manual.md)
+
+### Pull latest code on VM
+
+```bash
+cd /opt/vn_event_dw/vn_competitor_event_data_system
+git pull origin main
+docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml up -d --build
+```
+
+### Overwrite the VM DB with a local DB
+
+Copy the file to the VM host, replace `/opt/vn_event_dw/data/warehouse.db`, then restart the API. Full steps are in:
+
+- [Ubuntu VM Deployment (Docker Compose)](./docs/deploy_ubuntu_vm_docker.md)
+
+### Manual catch-up after a missed scheduled run
+
+Typical pattern:
+
+1. temporarily widen Socialdata and Sensor Tower lookback windows
+2. run `./deploy/docker/run_vm_pipeline.sh`
+3. verify latest raw FB publish time
+4. verify rebuilt months in `unified_events`
+
+The exact operational commands are documented in the system manual.
+
+## WSL Recommendation
+
+This repo is happiest in WSL Ubuntu rather than a Windows shell.
+
+Recommended layout:
+
+- keep the repo on the Linux filesystem if possible
+- use a local virtualenv
+- avoid running the main dev workflow from `/mnt/c/...` when you can
+
+Basic setup:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+cd ~/code/vn_competitor_event_data_system
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+## Project Layout
+
+- `src/vn_event_dw/`
+  - ETL, API, and warehouse logic
+- `examples/`
+  - sample config and sample inputs
+- `examples/fb_posts/`
+  - optional CSV landing folder for manual FB imports
+- `data_ingest/sensortower/raw/`
+  - replayable raw Sensor Tower snapshots and manifests
+- `deploy/docker/`
+  - Docker deployment assets, runtime env examples, pipeline wrapper, cron and systemd examples
+- `docs/`
+  - API docs, deployment guides, Socialdata setup guides, and system manual
+- `tests/`
+  - unit and integration tests
+
+## If You Are Handing This Repo To Someone Else
+
+Give them these docs first:
+
+- [System Manual](./docs/system_manual.md)
+- [Ubuntu VM Deployment (Docker Compose)](./docs/deploy_ubuntu_vm_docker.md)
+- [Event Lookup API](./docs/api.md)
+
+If they need Socialdata setup help:
+
+- [Socialdata guide for non-technical users (VI)](./docs/socialdata_huong_dan_nguoi_dung_vi.md)
+- [Socialdata guide for Claude/Codex (VI)](./docs/socialdata_huong_dan_agent_vi.md)
+
+## Status Notes
+
+This system currently uses:
+
+- SQLite as the production warehouse database
+- Docker Compose on the Ubuntu VM
+- ngrok for public API exposure
+- cron or systemd-timer style scheduling on the VM
+
+If needed later, SQLite can be migrated to PostgreSQL, but that is not the current production path.
