@@ -2,6 +2,54 @@
   "rule_keywords": ["release", "launch", "update"],
   "app_mappings": [
     {
+      "unified_app_id": "66b1f458d72cf61108f8c2c6",
+      "fb_page_id": "592484513953915",
+      "app_name": "Garena Delta Force",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "5e8694de25186e479bf4dd24",
+      "fb_page_id": "657903607415642",
+      "app_name": "FC Mobile VN",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "61a54e681800977bed4c561d",
+      "fb_page_id": "1612829125684071",
+      "app_name": "Garena Liên Quân Mobile",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "59d296dd60104c08ce201a27",
+      "fb_page_id": "116438885738795",
+      "app_name": "Garena Free Fire",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "5b220c230e64c70b3e4d02d4",
+      "fb_page_id": "198483360302297",
+      "app_name": "FC Online",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "6630547324bbd34fe64ddcc0",
+      "fb_page_id": "503927699464799",
+      "app_name": "Gold and Glory",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
       "unified_app_id": "57955d280211a6718a000002",
       "fb_page_id": "1722990624697290",
       "app_name": "Mobile Legends: Bang Bang",
@@ -75,6 +123,78 @@
     }
   ],
   "sensortower_targets": [
+    {
+      "unified_app_id": "66b1f458d72cf61108f8c2c6",
+      "os": "ios",
+      "app_id": "6670604287",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "66b1f458d72cf61108f8c2c6",
+      "os": "android",
+      "app_id": "com.garena.game.df",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5e8694de25186e479bf4dd24",
+      "os": "ios",
+      "app_id": "6737226348",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5e8694de25186e479bf4dd24",
+      "os": "android",
+      "app_id": "com.garena.game.fcmobilevn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "61a54e681800977bed4c561d",
+      "os": "ios",
+      "app_id": "1150288115",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "61a54e681800977bed4c561d",
+      "os": "android",
+      "app_id": "com.garena.game.kgvn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "59d296dd60104c08ce201a27",
+      "os": "ios",
+      "app_id": "1300146617",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "59d296dd60104c08ce201a27",
+      "os": "android",
+      "app_id": "com.dts.freefireth",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5b220c230e64c70b3e4d02d4",
+      "os": "ios",
+      "app_id": "1427414541",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5b220c230e64c70b3e4d02d4",
+      "os": "android",
+      "app_id": "com.garena.game.fo4mvn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "6630547324bbd34fe64ddcc0",
+      "os": "ios",
+      "app_id": "6476267318",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "6630547324bbd34fe64ddcc0",
+      "os": "android",
+      "app_id": "com.dois.greedgame",
+      "country": "VN"
+    },
     {
       "unified_app_id": "57955d280211a6718a000002",
       "os": "ios",
