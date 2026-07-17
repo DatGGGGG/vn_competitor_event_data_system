@@ -2,6 +2,22 @@
   "rule_keywords": ["release", "launch", "update"],
   "app_mappings": [
     {
+      "unified_app_id": "5d0355893ea9832c13e157d2",
+      "fb_page_id": "104709720995346",
+      "app_name": "Call of Duty: Mobile",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
+      "unified_app_id": "624221e4aaeb833d98f8b149",
+      "fb_page_id": "215966911599710",
+      "app_name": "Arena Breakout",
+      "is_active": true,
+      "valid_from": "2026-01-01T00:00:00+07:00",
+      "source_updated_at": "2026-06-01T00:00:00+07:00"
+    },
+    {
       "unified_app_id": "66b1f458d72cf61108f8c2c6",
       "fb_page_id": "592484513953915",
       "app_name": "Garena Delta Force",
@@ -123,6 +139,30 @@
     }
   ],
   "sensortower_targets": [
+    {
+      "unified_app_id": "5d0355893ea9832c13e157d2",
+      "os": "android",
+      "app_id": "com.vng.codmvn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5d0355893ea9832c13e157d2",
+      "os": "ios",
+      "app_id": "1477030970",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "624221e4aaeb833d98f8b149",
+      "os": "android",
+      "app_id": "com.vng.mf.uamo",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "624221e4aaeb833d98f8b149",
+      "os": "ios",
+      "app_id": "6474231541",
+      "country": "VN"
+    },
     {
       "unified_app_id": "66b1f458d72cf61108f8c2c6",
       "os": "ios",
