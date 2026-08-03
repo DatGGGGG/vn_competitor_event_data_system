@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -11,6 +12,9 @@ from urllib import error, parse, request
 
 DEFAULT_SOCIALDATA_BASE_URL = "https://socialdata.garena.vn"
 DEFAULT_TIMEOUT_SECONDS = 60
+DEFAULT_GRAPHQL_MAX_RETRIES = 3
+DEFAULT_GRAPHQL_RETRY_BACKOFF_SECONDS = 2.0
+RETRYABLE_GRAPHQL_HTTP_STATUSES = {502, 503, 504}
 DEFAULT_GOOGLE_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
 DEFAULT_GOOGLE_SCOPES = (DEFAULT_GOOGLE_SCOPE,)
 
@@ -171,6 +175,8 @@ class SocialDataConfig:
     base_url: str
     graphql_url: str
     timeout_seconds: int
+    graphql_max_retries: int = DEFAULT_GRAPHQL_MAX_RETRIES
+    graphql_retry_backoff_seconds: float = DEFAULT_GRAPHQL_RETRY_BACKOFF_SECONDS
     usession: str | None = None
     google_access_token: str | None = None
     google_service_account_file: str | None = None
@@ -256,6 +262,8 @@ def load_socialdata_config(
     google_service_account_file: str | None = None,
     google_scopes: str | list[str] | tuple[str, ...] | None = None,
     timeout_seconds: int | None = None,
+    graphql_max_retries: int | None = None,
+    graphql_retry_backoff_seconds: float | None = None,
 ) -> SocialDataConfig:
     resolved_base = (
         _normalize_text(base_url)
@@ -263,10 +271,27 @@ def load_socialdata_config(
         or DEFAULT_SOCIALDATA_BASE_URL
     ).rstrip("/")
     resolved_timeout = timeout_seconds or int(os.getenv("SOCIALDATA_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SECONDS)))
+    resolved_graphql_max_retries = (
+        graphql_max_retries
+        if graphql_max_retries is not None
+        else int(os.getenv("SOCIALDATA_GRAPHQL_MAX_RETRIES", str(DEFAULT_GRAPHQL_MAX_RETRIES)))
+    )
+    resolved_graphql_retry_backoff = (
+        graphql_retry_backoff_seconds
+        if graphql_retry_backoff_seconds is not None
+        else float(
+            os.getenv(
+                "SOCIALDATA_GRAPHQL_RETRY_BACKOFF_SECONDS",
+                str(DEFAULT_GRAPHQL_RETRY_BACKOFF_SECONDS),
+            )
+        )
+    )
     return SocialDataConfig(
         base_url=resolved_base,
         graphql_url=f"{resolved_base}/graphql",
         timeout_seconds=resolved_timeout,
+        graphql_max_retries=max(0, resolved_graphql_max_retries),
+        graphql_retry_backoff_seconds=max(0.0, resolved_graphql_retry_backoff),
         usession=_normalize_text(usession) or _normalize_text(os.getenv("SOCIALDATA_USESSION")),
         google_access_token=(
             _normalize_text(google_access_token) or _normalize_text(os.getenv("SOCIALDATA_GOOGLE_ACCESS_TOKEN"))
@@ -311,6 +336,8 @@ class SocialDataClient:
         google_service_account_file: str | None = None,
         google_scopes: str | list[str] | tuple[str, ...] | None = None,
         timeout_seconds: int | None = None,
+        graphql_max_retries: int | None = None,
+        graphql_retry_backoff_seconds: float | None = None,
     ) -> None:
         self.config = load_socialdata_config(
             base_url=base_url,
@@ -319,6 +346,8 @@ class SocialDataClient:
             google_service_account_file=google_service_account_file,
             google_scopes=google_scopes,
             timeout_seconds=timeout_seconds,
+            graphql_max_retries=graphql_max_retries,
+            graphql_retry_backoff_seconds=graphql_retry_backoff_seconds,
         )
 
     @property
@@ -332,6 +361,8 @@ class SocialDataClient:
             google_service_account_file=self.config.google_service_account_file,
             google_scopes=self.config.google_scopes,
             timeout_seconds=self.config.timeout_seconds,
+            graphql_max_retries=self.config.graphql_max_retries,
+            graphql_retry_backoff_seconds=self.config.graphql_retry_backoff_seconds,
         )
 
     def refresh_google_access_token_from_service_account(self) -> str:
@@ -513,19 +544,39 @@ class SocialDataClient:
             },
         )
 
-        try:
-            with request.urlopen(req, timeout=self.config.timeout_seconds) as response:
-                raw_body = response.read().decode("utf-8")
-        except error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Socialdata GraphQL request failed with HTTP {exc.code}: {body_text or exc.reason}") from exc
-        except error.URLError as exc:
-            raise RuntimeError(f"Socialdata GraphQL request failed: {exc.reason}") from exc
+        raw_body: str | None = None
+        attempts = self.config.graphql_max_retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                with request.urlopen(req, timeout=self.config.timeout_seconds) as response:
+                    raw_body = response.read().decode("utf-8")
+                break
+            except error.HTTPError as exc:
+                body_text = exc.read().decode("utf-8", errors="replace")
+                if exc.code in RETRYABLE_GRAPHQL_HTTP_STATUSES and attempt < attempts:
+                    self._sleep_before_graphql_retry(attempt)
+                    continue
+                raise RuntimeError(
+                    f"Socialdata GraphQL request failed with HTTP {exc.code}: {body_text or exc.reason}"
+                ) from exc
+            except error.URLError as exc:
+                if attempt < attempts:
+                    self._sleep_before_graphql_retry(attempt)
+                    continue
+                raise RuntimeError(f"Socialdata GraphQL request failed: {exc.reason}") from exc
+
+        if raw_body is None:
+            raise RuntimeError("Socialdata GraphQL request failed without a response body.")
 
         parsed = json.loads(raw_body)
         if not isinstance(parsed, dict):
             raise RuntimeError("Socialdata GraphQL response was not a JSON object.")
         return parsed
+
+    def _sleep_before_graphql_retry(self, attempt: int) -> None:
+        delay = self.config.graphql_retry_backoff_seconds * (2 ** max(0, attempt - 1))
+        if delay > 0:
+            time.sleep(delay)
 
     def auth_check(self, *, usession: str | None = None) -> dict[str, Any]:
         return self.graphql(query="query { __typename }", usession=usession)

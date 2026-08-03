@@ -139,6 +139,48 @@ class SocialDataTests(unittest.TestCase):
         self.assertEqual(result.response_body, '{"message":"Invalid Email"}')
         self.assertIsNone(result.usession)
 
+    def test_graphql_retries_transient_gateway_errors(self) -> None:
+        client = SocialDataClient(
+            base_url="https://socialdata.garena.vn",
+            usession="cookie123",
+            graphql_max_retries=1,
+            graphql_retry_backoff_seconds=0,
+        )
+
+        class _FakeHeaders:
+            def get_all(self, name: str):
+                return None
+
+            def get(self, name: str):
+                return None
+
+        class _FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def read(self):
+                return b'{"data":{"__typename":"Query"}}'
+
+        responses = [
+            error.HTTPError(
+                "https://socialdata.garena.vn/graphql",
+                504,
+                "Gateway Time-out",
+                _FakeHeaders(),
+                io.BytesIO(b"<html>timeout</html>"),
+            ),
+            _FakeResponse(),
+        ]
+
+        with patch("vn_event_dw.socialdata.request.urlopen", side_effect=responses) as urlopen:
+            result = client.graphql(query="query { __typename }")
+
+        self.assertEqual(result, {"data": {"__typename": "Query"}})
+        self.assertEqual(urlopen.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
