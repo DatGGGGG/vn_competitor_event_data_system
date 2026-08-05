@@ -47,6 +47,8 @@ The recommended production setup is:
 - Ubuntu VM
 - Docker Compose deployment
 - SQLite database stored on the VM host
+- tracked-game config managed through `examples/config.json`
+- optional password-protected admin UI for adding tracked games
 - Socialdata sync via Google service-account authentication
 - Sensor Tower sync via API token
 - unified-event build via Compass Gateway / OpenAI-compatible API
@@ -89,7 +91,7 @@ The current VM-side pipeline wrapper:
 ### Runtime Components
 
 - `api`
-  - serves the read-only event API
+  - serves the event API and optional tracked-game admin UI
 - `ngrok`
   - exposes the API publicly
 - `job`
@@ -141,6 +143,60 @@ python -m vn_event_dw.cli serve-api --db data/warehouse.db
 See:
 
 - [Ubuntu VM Deployment (Docker Compose)](./docs/deploy_ubuntu_vm_docker.md)
+
+## Admin UI For Adding Tracked Games
+
+The admin UI lets an internal operator add a tracked game without manually editing JSON or running ETL commands.
+
+Enable it on the VM by setting these values in `deploy/docker/pipeline.env`:
+
+```bash
+ADMIN_UI_ENABLED=1
+ADMIN_PASSWORD=replace_with_shared_internal_password
+ADMIN_CONFIG_PATH=/app/examples/config.json
+ADMIN_REPO_ROOT=/repo
+ADMIN_REPO_CONFIG_PATH=examples/config.json
+ADMIN_GIT_BRANCH=main
+ADMIN_GIT_ENABLED=1
+ADMIN_BACKFILL_LOOKBACK_DAYS=30
+ADMIN_API_VERIFY_URL=http://127.0.0.1:8765/api/games
+```
+
+The Docker deployment also needs the repo mounted through `HOST_REPO_DIR` in `deploy/docker/vm.env`:
+
+```bash
+HOST_REPO_DIR=/opt/vn_event_dw/vn_competitor_event_data_system
+```
+
+After changing env or Docker mounts, rebuild and recreate the API container:
+
+```bash
+cd /opt/vn_event_dw/vn_competitor_event_data_system
+sudo docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml up -d --build --force-recreate api
+```
+
+Then open:
+
+```text
+https://april-refund-promoter.ngrok-free.dev/admin/games
+```
+
+What the UI does after a game is applied:
+
+- validates duplicate IDs and required Android/iOS SensorTower targets
+- updates `examples/config.json`
+- validates the JSON file
+- commits and pushes the config change to GitHub
+- syncs Socialdata posts for the new `unified_app_id`
+- syncs and loads SensorTower data for the new `unified_app_id`
+- rebuilds unified events for previous month and current month
+- verifies the game appears through `/api/games`
+
+Operational notes:
+
+- The VM must have working GitHub push credentials for `git push origin main`.
+- The public read API does not require a secret, but the admin UI must always have `ADMIN_PASSWORD`.
+- If the admin job fails, open the job page shown by the UI and read the command log from top to bottom.
 
 ## Main CLI Workflows
 

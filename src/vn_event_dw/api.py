@@ -22,6 +22,7 @@ from .api_service import (
     fetch_post_detail,
     validate_event_lookup_params,
 )
+from .admin import admin_enabled_from_env, create_admin_router
 from .etl import open_connection
 
 SourceType = Literal["fb_post", "st_app_update_event", "st_version_event"]
@@ -260,6 +261,8 @@ def _resolve_db_path(db_path: str | Path | None) -> Path:
 def create_app(*, db_path: str | Path | None = None) -> FastAPI:
     resolved_db_path = _resolve_db_path(db_path)
     app = FastAPI(title="VN Event DW API", version="0.1.0")
+    if admin_enabled_from_env():
+        app.include_router(create_admin_router(db_path=resolved_db_path))
 
     def _lookup_params(
         unified_app_id: Annotated[list[str], Query(..., min_length=1)],

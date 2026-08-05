@@ -11,6 +11,8 @@ x-vn-event-dw-base: &vn_event_dw_base
     - ${HOST_DATA_DIR}:/app/data
     - ${HOST_INGEST_DIR}:/app/data_ingest
     - ${HOST_SECRETS_DIR}:/app/secrets:ro
+    - ${HOST_REPO_DIR:-../..}:/repo
+    - ${HOST_REPO_DIR:-../..}/examples/config.json:/app/examples/config.json
 
 services:
   api:

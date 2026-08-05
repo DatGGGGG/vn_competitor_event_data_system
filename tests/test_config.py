@@ -12,7 +12,10 @@ class ConfigTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(config.app_mappings), 5)
         self.assertGreaterEqual(len(config.sensortower_targets), 2)
-        self.assertEqual(config.sensortower_targets[0].unified_app_id, "57955d280211a6718a000002")
+        self.assertIn(
+            "57955d280211a6718a000002",
+            {target.unified_app_id for target in config.sensortower_targets},
+        )
         self.assertEqual(config.rule_keywords, ("release", "launch", "update"))
 
 
