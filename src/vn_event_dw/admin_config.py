@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -175,10 +176,22 @@ def write_config_payload_atomic(config_path: str | Path, payload: dict[str, Any]
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(rendered)
-        Path(tmp_name).replace(path)
+        try:
+            Path(tmp_name).replace(path)
+        except OSError as exc:
+            if exc.errno != 16:
+                raise
+            # Docker single-file bind mounts can reject atomic rename with EBUSY.
+            # Keep a validated temp file, then copy its contents into the mounted file.
+            with open(tmp_name, "r", encoding="utf-8") as source:
+                json.load(source)
+                source.seek(0)
+                with path.open("w", encoding="utf-8") as target:
+                    shutil.copyfileobj(source, target)
     except Exception:
         Path(tmp_name).unlink(missing_ok=True)
         raise
+    Path(tmp_name).unlink(missing_ok=True)
 
 
 def validate_payload_has_required_targets(payload: dict[str, Any], unified_app_id: str) -> None:
