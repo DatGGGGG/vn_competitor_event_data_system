@@ -274,13 +274,14 @@ def _run_apply_job(
 def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str, app_name: str) -> None:
     if not (settings.repo_root / ".git").exists():
         raise RuntimeError(f"Git repo not found at {settings.repo_root}. Set ADMIN_REPO_ROOT to the mounted repo.")
-    _run_command(store, job_id, ["git", "status", "--short"], cwd=settings.repo_root)
-    _run_command(store, job_id, ["git", "add", settings.repo_config_path], cwd=settings.repo_root)
+    git = ["git", "-c", f"safe.directory={settings.repo_root}"]
+    _run_command(store, job_id, [*git, "status", "--short"], cwd=settings.repo_root)
+    _run_command(store, job_id, [*git, "add", settings.repo_config_path], cwd=settings.repo_root)
     message = f"Add tracked game: {app_name}"
     commit = _run_command(
         store,
         job_id,
-        ["git", "commit", "-m", message],
+        [*git, "commit", "-m", message],
         cwd=settings.repo_root,
         allow_return_codes={0, 1},
     )
@@ -288,7 +289,7 @@ def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str,
         _job_log(store, job_id, "No git commit created because config was already committed.")
     elif commit.returncode != 0:
         raise RuntimeError(f"git commit failed with exit code {commit.returncode}")
-    _run_command(store, job_id, ["git", "push", "origin", settings.git_branch], cwd=settings.repo_root)
+    _run_command(store, job_id, [*git, "push", "origin", settings.git_branch], cwd=settings.repo_root)
 
 
 def _run_targeted_backfill(*, settings: AdminSettings, store: AdminJobStore, job_id: str, unified_app_id: str) -> None:
