@@ -1,6 +1,16 @@
 {
-  "rule_keywords": ["release", "launch", "update"],
+  "rule_keywords": [
+    "release",
+    "launch",
+    "update"
+  ],
   "app_mappings": [
+    {
+      "unified_app_id": "5da680bb42fa0c4364eb64c8",
+      "fb_page_id": "106240794121371",
+      "app_name": "LMHT: Tốc Chiến",
+      "is_active": true
+    },
     {
       "unified_app_id": "5d0355893ea9832c13e157d2",
       "fb_page_id": "104709720995346",
@@ -139,6 +149,18 @@
     }
   ],
   "sensortower_targets": [
+    {
+      "unified_app_id": "5da680bb42fa0c4364eb64c8",
+      "os": "android",
+      "app_id": "com.riotgames.league.wildriftvn",
+      "country": "VN"
+    },
+    {
+      "unified_app_id": "5da680bb42fa0c4364eb64c8",
+      "os": "ios",
+      "app_id": "1531280382",
+      "country": "VN"
+    },
     {
       "unified_app_id": "5d0355893ea9832c13e157d2",
       "os": "android",
