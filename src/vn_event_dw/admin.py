@@ -5,6 +5,7 @@ import html
 import json
 import os
 import secrets
+import stat
 import subprocess
 import sys
 import threading
@@ -44,6 +45,7 @@ class AdminSettings:
     git_enabled: bool
     git_user_name: str
     git_user_email: str
+    github_token: str
     backfill_lookback_days: int
     api_verify_url: str
 
@@ -125,6 +127,7 @@ def load_admin_settings(*, db_path: Path) -> AdminSettings:
         or "VN Event DW Admin",
         git_user_email=os.getenv("ADMIN_GIT_USER_EMAIL", "vn-event-dw-admin@localhost").strip()
         or "vn-event-dw-admin@localhost",
+        github_token=os.getenv("ADMIN_GITHUB_TOKEN", "").strip(),
         backfill_lookback_days=int(os.getenv("ADMIN_BACKFILL_LOOKBACK_DAYS", "30")),
         api_verify_url=os.getenv("ADMIN_API_VERIFY_URL", "http://127.0.0.1:8765/api/games").strip()
         or "http://127.0.0.1:8765/api/games",
@@ -283,7 +286,12 @@ def _run_apply_job(
     preview: Any,
 ) -> None:
     store.update(job_id, status="running", started_at=_utc_now())
+    pre_head = None
+    git_pushed = not settings.git_enabled
     try:
+        if settings.git_enabled:
+            pre_head = _run_git_preflight(settings=settings, store=store, job_id=job_id)
+
         _job_log(store, job_id, f"Saving config: {settings.config_path}")
         write_config_payload_atomic(settings.config_path, updated_payload)
 
@@ -291,6 +299,7 @@ def _run_apply_job(
 
         if settings.git_enabled:
             _run_git_flow(settings=settings, store=store, job_id=job_id, app_name=preview.app_name)
+            git_pushed = True
         else:
             _job_log(store, job_id, "Skipping git commit/push because ADMIN_GIT_ENABLED=0.")
 
@@ -300,14 +309,14 @@ def _run_apply_job(
         _verify_api(settings=settings, store=store, job_id=job_id, unified_app_id=preview.unified_app_id)
         store.update(job_id, status="succeeded", finished_at=_utc_now())
     except Exception as exc:
+        if settings.git_enabled and not git_pushed and pre_head:
+            _rollback_git_change(settings=settings, store=store, job_id=job_id, pre_head=pre_head)
         _job_log(store, job_id, f"ERROR: {exc}")
         store.update(job_id, status="failed", finished_at=_utc_now(), error=str(exc))
 
 
-def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str, app_name: str) -> None:
-    if not (settings.repo_root / ".git").exists():
-        raise RuntimeError(f"Git repo not found at {settings.repo_root}. Set ADMIN_REPO_ROOT to the mounted repo.")
-    git = [
+def _git_command(settings: AdminSettings) -> list[str]:
+    return [
         "git",
         "-c",
         f"safe.directory={settings.repo_root}",
@@ -316,6 +325,34 @@ def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str,
         "-c",
         f"user.email={settings.git_user_email}",
     ]
+
+
+def _run_git_preflight(*, settings: AdminSettings, store: AdminJobStore, job_id: str) -> str:
+    if not (settings.repo_root / ".git").exists():
+        raise RuntimeError(f"Git repo not found at {settings.repo_root}. Set ADMIN_REPO_ROOT to the mounted repo.")
+    if not settings.github_token:
+        raise RuntimeError("ADMIN_GITHUB_TOKEN is required when ADMIN_GIT_ENABLED=1.")
+    git = _git_command(settings)
+    _job_log(store, job_id, f"GitHub token configured: {'yes' if settings.github_token else 'no'}")
+    _job_log(store, job_id, f"Git branch: {settings.git_branch}")
+    remote = _run_command(store, job_id, [*git, "remote", "get-url", "origin"], cwd=settings.repo_root)
+    _job_log(store, job_id, f"Git remote origin: {_redact_git_remote(remote.stdout.strip())}")
+    status_result = _run_command(
+        store,
+        job_id,
+        [*git, "status", "--porcelain", "--", settings.repo_config_path],
+        cwd=settings.repo_root,
+    )
+    if status_result.stdout.strip():
+        raise RuntimeError(
+            f"{settings.repo_config_path} has uncommitted changes. Roll back or commit them before using the admin UI."
+        )
+    pre_head = _run_command(store, job_id, [*git, "rev-parse", "HEAD"], cwd=settings.repo_root)
+    return pre_head.stdout.strip()
+
+
+def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str, app_name: str) -> None:
+    git = _git_command(settings)
     _run_command(store, job_id, [*git, "status", "--short"], cwd=settings.repo_root)
     _run_command(store, job_id, [*git, "add", settings.repo_config_path], cwd=settings.repo_root)
     message = f"Add tracked game: {app_name}"
@@ -330,7 +367,60 @@ def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str,
         _job_log(store, job_id, "No git commit created because config was already committed.")
     elif commit.returncode != 0:
         raise RuntimeError(f"git commit failed with exit code {commit.returncode}")
-    _run_command(store, job_id, [*git, "push", "origin", settings.git_branch], cwd=settings.repo_root)
+    _run_git_push_with_token(settings=settings, store=store, job_id=job_id, git=git)
+
+
+def _run_git_push_with_token(
+    *,
+    settings: AdminSettings,
+    store: AdminJobStore,
+    job_id: str,
+    git: list[str],
+) -> None:
+    askpass_path = settings.job_dir / f"{job_id}_git_askpass.sh"
+    askpass_path.write_text(
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  *Username*) printf '%s\\n' \"x-access-token\" ;;\n"
+        "  *) printf '%s\\n' \"$ADMIN_GITHUB_TOKEN\" ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    askpass_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    env = {
+        **os.environ,
+        "GIT_ASKPASS": str(askpass_path),
+        "GIT_TERMINAL_PROMPT": "0",
+        "ADMIN_GITHUB_TOKEN": settings.github_token,
+    }
+    try:
+        _run_command(
+            store,
+            job_id,
+            [*git, "push", "origin", settings.git_branch],
+            cwd=settings.repo_root,
+            env=env,
+        )
+    finally:
+        askpass_path.unlink(missing_ok=True)
+
+
+def _rollback_git_change(*, settings: AdminSettings, store: AdminJobStore, job_id: str, pre_head: str) -> None:
+    git = _git_command(settings)
+    _job_log(store, job_id, f"Rolling back local config/Git state to {pre_head}.")
+    try:
+        _run_command(store, job_id, [*git, "reset", "--soft", pre_head], cwd=settings.repo_root)
+        _run_command(store, job_id, [*git, "restore", "--staged", settings.repo_config_path], cwd=settings.repo_root)
+        _run_command(store, job_id, [*git, "restore", settings.repo_config_path], cwd=settings.repo_root)
+    except Exception as rollback_error:
+        _job_log(store, job_id, f"Rollback failed: {rollback_error}")
+
+
+def _redact_git_remote(remote: str) -> str:
+    if "@" not in remote or "://" not in remote:
+        return remote
+    scheme, rest = remote.split("://", 1)
+    return f"{scheme}://<redacted>@{rest.split('@', 1)[1]}"
 
 
 def _run_targeted_backfill(*, settings: AdminSettings, store: AdminJobStore, job_id: str, unified_app_id: str) -> None:
@@ -410,6 +500,7 @@ def _run_command(
     command: list[str],
     *,
     cwd: Path | None = None,
+    env: dict[str, str] | None = None,
     allow_return_codes: set[int] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     allowed = allow_return_codes or {0}
@@ -421,6 +512,7 @@ def _run_command(
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
         check=False,
     )
     if result.stdout:

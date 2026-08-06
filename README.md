@@ -160,9 +160,13 @@ ADMIN_GIT_BRANCH=main
 ADMIN_GIT_ENABLED=1
 ADMIN_GIT_USER_NAME=VN Event DW Admin
 ADMIN_GIT_USER_EMAIL=vn-event-dw-admin@localhost
+ADMIN_GITHUB_TOKEN=replace_with_fine_scoped_github_token
 ADMIN_BACKFILL_LOOKBACK_DAYS=30
 ADMIN_API_VERIFY_URL=http://127.0.0.1:8765/api/games
 ```
+
+`ADMIN_GITHUB_TOKEN` is used only inside the VM/container for non-interactive `git push`.
+Keep the real token in `deploy/docker/pipeline.env` on the VM only; never commit it.
 
 The Docker deployment also needs the repo mounted through `HOST_REPO_DIR` in `deploy/docker/vm.env`:
 

@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from vn_event_dw.admin import load_admin_settings
+from vn_event_dw.admin import AdminJobStore, load_admin_settings
+from vn_event_dw import admin
 from vn_event_dw.api import create_app
 from vn_event_dw.etl import init_db, open_connection
 
@@ -123,6 +124,47 @@ class AdminApiTests(unittest.TestCase):
 
         self.assertEqual(settings.git_user_name, "VN Event DW Admin")
         self.assertEqual(settings.git_user_email, "vn-event-dw-admin@localhost")
+
+    def test_git_preflight_requires_github_token_before_config_write(self) -> None:
+        repo_root = self.root / "repo"
+        (repo_root / ".git").mkdir(parents=True)
+        env = {
+            "ADMIN_CONFIG_PATH": str(self.config_path),
+            "ADMIN_JOB_DIR": str(self.job_dir),
+            "ADMIN_REPO_ROOT": str(repo_root),
+            "ADMIN_REPO_CONFIG_PATH": "examples/config.json",
+            "ADMIN_GIT_ENABLED": "1",
+            "ADMIN_GITHUB_TOKEN": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            settings = load_admin_settings(db_path=self.db_path)
+        store = AdminJobStore(self.job_dir)
+        job_id = store.create(title="Add tracked game: Token Test", metadata={})
+
+        with self.assertRaisesRegex(RuntimeError, "ADMIN_GITHUB_TOKEN"):
+            admin._run_git_preflight(settings=settings, store=store, job_id=job_id)
+
+    def test_git_push_uses_token_without_logging_it(self) -> None:
+        env = {
+            "ADMIN_CONFIG_PATH": str(self.config_path),
+            "ADMIN_JOB_DIR": str(self.job_dir),
+            "ADMIN_REPO_ROOT": str(self.root),
+            "ADMIN_GITHUB_TOKEN": "super-secret-token",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            settings = load_admin_settings(db_path=self.db_path)
+        store = AdminJobStore(self.job_dir)
+        job_id = store.create(title="Add tracked game: Push Test", metadata={})
+
+        completed = admin.subprocess.CompletedProcess(args=["git"], returncode=0, stdout="", stderr="")
+        with patch("vn_event_dw.admin.subprocess.run", return_value=completed) as run_mock:
+            admin._run_git_push_with_token(settings=settings, store=store, job_id=job_id, git=["git"])
+
+        logged_job = store.read(job_id)
+        rendered_log = "\n".join(logged_job["log"])
+        self.assertIn("git push origin main", rendered_log)
+        self.assertNotIn("super-secret-token", rendered_log)
+        self.assertEqual(run_mock.call_args.kwargs["env"]["ADMIN_GITHUB_TOKEN"], "super-secret-token")
 
     def test_failed_job_can_be_marked_manually_resolved(self) -> None:
         client = self._client()
