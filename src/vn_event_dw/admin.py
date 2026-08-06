@@ -42,6 +42,8 @@ class AdminSettings:
     repo_config_path: str
     git_branch: str
     git_enabled: bool
+    git_user_name: str
+    git_user_email: str
     backfill_lookback_days: int
     api_verify_url: str
 
@@ -119,6 +121,10 @@ def load_admin_settings(*, db_path: Path) -> AdminSettings:
         or "examples/config.json",
         git_branch=os.getenv("ADMIN_GIT_BRANCH", "main").strip() or "main",
         git_enabled=os.getenv("ADMIN_GIT_ENABLED", "1").strip().lower() not in {"0", "false", "no", "n"},
+        git_user_name=os.getenv("ADMIN_GIT_USER_NAME", "VN Event DW Admin").strip()
+        or "VN Event DW Admin",
+        git_user_email=os.getenv("ADMIN_GIT_USER_EMAIL", "vn-event-dw-admin@localhost").strip()
+        or "vn-event-dw-admin@localhost",
         backfill_lookback_days=int(os.getenv("ADMIN_BACKFILL_LOOKBACK_DAYS", "30")),
         api_verify_url=os.getenv("ADMIN_API_VERIFY_URL", "http://127.0.0.1:8765/api/games").strip()
         or "http://127.0.0.1:8765/api/games",
@@ -301,7 +307,15 @@ def _run_apply_job(
 def _run_git_flow(*, settings: AdminSettings, store: AdminJobStore, job_id: str, app_name: str) -> None:
     if not (settings.repo_root / ".git").exists():
         raise RuntimeError(f"Git repo not found at {settings.repo_root}. Set ADMIN_REPO_ROOT to the mounted repo.")
-    git = ["git", "-c", f"safe.directory={settings.repo_root}"]
+    git = [
+        "git",
+        "-c",
+        f"safe.directory={settings.repo_root}",
+        "-c",
+        f"user.name={settings.git_user_name}",
+        "-c",
+        f"user.email={settings.git_user_email}",
+    ]
     _run_command(store, job_id, [*git, "status", "--short"], cwd=settings.repo_root)
     _run_command(store, job_id, [*git, "add", settings.repo_config_path], cwd=settings.repo_root)
     message = f"Add tracked game: {app_name}"

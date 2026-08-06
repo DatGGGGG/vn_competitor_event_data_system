@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from vn_event_dw.admin import load_admin_settings
 from vn_event_dw.api import create_app
 from vn_event_dw.etl import init_db, open_connection
 
@@ -111,6 +112,17 @@ class AdminApiTests(unittest.TestCase):
         self.assertIn("Preview Game", response.text)
         self.assertIn("com.preview.game", response.text)
         self.assertIn("987654321", response.text)
+
+    def test_admin_settings_include_default_git_identity(self) -> None:
+        env = {
+            "ADMIN_CONFIG_PATH": str(self.config_path),
+            "ADMIN_JOB_DIR": str(self.job_dir),
+        }
+        with patch.dict(os.environ, env, clear=False):
+            settings = load_admin_settings(db_path=self.db_path)
+
+        self.assertEqual(settings.git_user_name, "VN Event DW Admin")
+        self.assertEqual(settings.git_user_email, "vn-event-dw-admin@localhost")
 
     def test_failed_job_can_be_marked_manually_resolved(self) -> None:
         client = self._client()
