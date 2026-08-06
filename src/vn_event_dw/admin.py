@@ -238,6 +238,33 @@ def create_admin_router(*, db_path: Path) -> APIRouter:
             raise HTTPException(status_code=404, detail="Admin job not found.") from exc
         return _html_response(_render_job_page(job))
 
+    @router.post("/admin/jobs/{job_id}/resolve")
+    async def admin_job_resolve(request_obj: Request, job_id: str) -> Response:
+        require_admin(request_obj)
+        form = await _read_urlencoded_form(request_obj)
+        try:
+            job = store.read(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Admin job not found.") from exc
+        if job.get("status") not in {"failed", "manually_resolved"}:
+            raise HTTPException(status_code=400, detail="Only failed jobs can be manually resolved.")
+        note = form.get("note", "").strip()
+        resolved_at = _utc_now()
+        resolved_message = "Marked manually resolved"
+        if note:
+            resolved_message += f": {note}"
+        store.append_log(job_id, f"[{resolved_at}] {resolved_message}")
+        store.update(
+            job_id,
+            status="manually_resolved",
+            finished_at=job.get("finished_at") or resolved_at,
+            manual_resolution={
+                "resolved_at": resolved_at,
+                "note": note,
+            },
+        )
+        return RedirectResponse(f"/admin/jobs/{job_id}", status_code=303)
+
     return router
 
 
@@ -513,9 +540,14 @@ def _render_games_page(
     )
     latest_html = ""
     if latest_job:
+        status = str(latest_job["status"])
+        if status == "manually_resolved":
+            status_label = "manually resolved"
+        else:
+            status_label = status
         latest_html = (
             f"<p>Latest job: <a class='button ghost' href='/admin/jobs/{html.escape(str(latest_job['job_id']))}'>"
-            f"{html.escape(str(latest_job['status']))} - {html.escape(str(latest_job['title']))}</a></p>"
+            f"{html.escape(status_label)} - {html.escape(str(latest_job['title']))}</a></p>"
         )
     values = form or {}
     error_html = f"<p class='danger'>{html.escape(error)}</p>" if error else ""
@@ -584,6 +616,23 @@ def _render_preview_page(*, settings: AdminSettings, preview: Any, form: dict[st
 def _render_job_page(job: dict[str, Any]) -> str:
     log = "\n".join(str(item) for item in job.get("log", []))
     refresh = "<script>setTimeout(function(){ window.location.reload(); }, 10000);</script>" if job.get("status") in {"queued", "running"} else ""
+    resolution = job.get("manual_resolution") if isinstance(job.get("manual_resolution"), dict) else None
+    resolution_html = ""
+    if resolution:
+        resolution_html = (
+            "<p><strong>Manual resolution:</strong> "
+            f"{html.escape(str(resolution.get('resolved_at', '')))}"
+            f" - {html.escape(str(resolution.get('note', '')))}</p>"
+        )
+    resolve_html = ""
+    if job.get("status") == "failed":
+        resolve_html = """
+          <form method="post" action="/admin/jobs/{job_id}/resolve">
+            <label>Manual resolution note</label>
+            <input name="note" placeholder="Example: Finished targeted backfill manually from VM terminal.">
+            <p><button type="submit">Mark Manually Resolved</button></p>
+          </form>
+        """.format(job_id=html.escape(str(job.get("job_id", ""))))
     return _page(
         "Admin Job",
         f"""
@@ -592,6 +641,8 @@ def _render_job_page(job: dict[str, Any]) -> str:
           <h1>{html.escape(str(job.get('title', 'Admin job')))}</h1>
           <p>Status: <strong>{html.escape(str(job.get('status', 'unknown')))}</strong></p>
           <p>Created: {html.escape(str(job.get('created_at')))} | Started: {html.escape(str(job.get('started_at')))} | Finished: {html.escape(str(job.get('finished_at')))}</p>
+          {resolution_html}
+          {resolve_html}
           <p><a class="button ghost" href="/admin/games">Back to games</a></p>
         </section>
         <section class="card">

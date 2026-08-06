@@ -112,6 +112,43 @@ class AdminApiTests(unittest.TestCase):
         self.assertIn("com.preview.game", response.text)
         self.assertIn("987654321", response.text)
 
+    def test_failed_job_can_be_marked_manually_resolved(self) -> None:
+        client = self._client()
+        client.post("/admin/login", data="password=secret", headers={"content-type": "application/x-www-form-urlencoded"})
+        self.job_dir.mkdir(parents=True, exist_ok=True)
+        job_id = "job_failed"
+        (self.job_dir / "latest.txt").write_text(job_id + "\n", encoding="utf-8")
+        (self.job_dir / f"{job_id}.json").write_text(
+            json.dumps(
+                {
+                    "job_id": job_id,
+                    "title": "Add tracked game: Example",
+                    "status": "failed",
+                    "metadata": {},
+                    "created_at": "2026-08-05T00:00:00+00:00",
+                    "started_at": "2026-08-05T00:00:00+00:00",
+                    "finished_at": "2026-08-05T00:01:00+00:00",
+                    "error": "boom",
+                    "log": ["failed"],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        response = client.post(
+            f"/admin/jobs/{job_id}/resolve",
+            data="note=Finished+from+terminal",
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        job_page = client.get(f"/admin/jobs/{job_id}")
+        games_page = client.get("/admin/games")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("manually_resolved", job_page.text)
+        self.assertIn("Finished from terminal", job_page.text)
+        self.assertIn("manually resolved - Add tracked game: Example", games_page.text)
+
 
 if __name__ == "__main__":
     unittest.main()
