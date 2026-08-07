@@ -277,6 +277,15 @@ Full deployment guide:
 
 The system exposes a read-only event API.
 
+New agents should use the `/api/v2` endpoints because they distinguish event `month_bucket` filters from actual FB post `publish_time` filters.
+
+Recommended v2 docs:
+
+- [Agent-Friendly API v2](./api_v2.md)
+- [Agent Instructions For API v2](./api_v2_agent_instructions.md)
+
+Legacy endpoints:
+
 Core endpoints:
 
 - `GET /api/games`

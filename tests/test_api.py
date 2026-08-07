@@ -107,7 +107,9 @@ class ApiTests(unittest.TestCase):
                 ('post_b2', 'app_b', 'page_b', 'channel_b', 'Game B Page', 'video',
                  'Naruto crossover reveal', '', 'https://example.com/b2', '2026-04-06T07:00:00Z', '', '450', '40', '10', '4', '200', 'seed.csv', '2026-06-12T12:00:00Z'),
                 ('post_mlbb1', 'mlbb_app', 'page_mlbb', 'channel_mlbb', 'MLBB Page', 'photo',
-                 'Academy crossover teaser', '', 'https://example.com/mlbb1', '2026-04-09T10:00:00Z', '', '260', '30', '6', '3', '90', 'seed.csv', '2026-06-11T20:00:00Z')
+                 'Academy crossover teaser', '', 'https://example.com/mlbb1', '2026-04-09T10:00:00Z', '', '260', '30', '6', '3', '90', 'seed.csv', '2026-06-11T20:00:00Z'),
+                ('post_a5', 'app_a', 'page_a', 'channel_a', 'Game A Page', 'photo',
+                 'August raw post without event link', '', 'https://example.com/a5', '2026-08-05T09:30:00Z', '', '300', '50', '7', '2', '180', 'seed.csv', '2026-08-05T10:00:00Z')
             """
         )
         conn.execute(
@@ -596,6 +598,126 @@ class ApiTests(unittest.TestCase):
         block = response.json()["results"][0]
         self.assertEqual(block["app_name"], "Game B")
         self.assertEqual(block["events"], [])
+
+    def test_v2_health_and_games_include_metadata(self) -> None:
+        response = self.client.get("/api/v2/health")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["result"]["status"], "ok")
+        self.assertEqual(payload["meta"]["api_version"], "v2")
+        self.assertIn("GET /api/v2/games/{unified_app_id}/posts", payload["result"]["endpoints"])
+
+        response = self.client.get("/api/v2/games", params={"q": "MLBB"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["results"], [{"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"}])
+        self.assertEqual(payload["meta"]["semantics"], "registered_games")
+        self.assertEqual(payload["meta"]["count"], 1)
+
+    def test_v2_game_detail_returns_registered_game(self) -> None:
+        response = self.client.get("/api/v2/games/app_a")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["result"]["app_name"], "Game A")
+        self.assertEqual(payload["result"]["fb_page_ids"], ["page_a"])
+        self.assertTrue(payload["result"]["is_active"])
+
+    def test_v2_events_use_explicit_month_bucket_filters(self) -> None:
+        response = self.client.get("/api/v2/games/app_a/events", params=[("month", "2026-04")])
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["semantics"], "event_month_bucket")
+        self.assertEqual([event["unified_event_id"] for event in payload["results"]], ["event_a2", "event_a1", "event_a3"])
+
+        response = self.client.get(
+            "/api/v2/games/app_a/events",
+            params={"start_month": "2026-04", "end_month": "2026-05"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({event["month_bucket"] for event in response.json()["results"]}, {"2026-04", "2026-05"})
+
+    def test_v2_event_summary_and_search_are_scoped_to_game(self) -> None:
+        response = self.client.get("/api/v2/games/app_a/events/summary", params=[("month", "2026-04")])
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["result"]["event_count_total"], 3)
+        self.assertEqual(payload["result"]["event_count_fb"], 2)
+        self.assertEqual(payload["meta"]["semantics"], "event_month_bucket")
+
+        response = self.client.get(
+            "/api/v2/games/mlbb_app/events/search",
+            params=[("q", "Naruto"), ("month", "2026-04")],
+        )
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["results"][0]
+        self.assertEqual(result["unified_event_id"], "event_mlbb1")
+        self.assertEqual(result["match_scope"], "scoped_game")
+
+    def test_v2_event_coverage_uses_exact_month_bucket_scope(self) -> None:
+        response = self.client.get("/api/v2/games/app_a/events/coverage", params=[("month", "2026-05")])
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["result"]["event_count"], 1)
+        self.assertEqual(payload["result"]["fb_post_count"], 1)
+        self.assertEqual(payload["result"]["min_month_bucket"], "2026-05")
+        self.assertEqual(payload["meta"]["semantics"], "event_month_bucket_coverage")
+
+    def test_v2_raw_game_posts_use_publish_time_not_event_month_bucket(self) -> None:
+        response = self.client.get(
+            "/api/v2/games/app_a/posts",
+            params={"publish_start": "2026-08-01", "publish_end": "2026-08-31"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["semantics"], "raw_fb_post_publish_time")
+        self.assertEqual([post["source_post_id"] for post in payload["results"]], ["post_a5"])
+        self.assertEqual(payload["results"][0]["reaction_count"], 50)
+        self.assertEqual(payload["results"][0]["comment_count"], 7)
+        self.assertEqual(payload["results"][0]["linked_events"], [])
+
+    def test_v2_raw_game_posts_default_to_latest_posts_and_support_text_search(self) -> None:
+        response = self.client.get("/api/v2/games/app_a/posts", params={"limit": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["source_post_id"], "post_a5")
+
+        response = self.client.get("/api/v2/games/app_a/posts", params={"q": "reminder"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([post["source_post_id"] for post in response.json()["results"]], ["post_a2"])
+
+    def test_v2_post_detail_includes_linked_events_and_count_fields(self) -> None:
+        response = self.client.get("/api/v2/posts/post_a1")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["source_post_id"], "post_a1")
+        self.assertEqual(payload["engagement_count"], 120)
+        self.assertEqual(payload["linked_events"][0]["unified_event_id"], "event_a1")
+        self.assertEqual(payload["linked_events"][0]["month_bucket"], "2026-04")
+
+    def test_v2_event_linked_posts_use_count_field_names(self) -> None:
+        response = self.client.get("/api/v2/events/event_a1/posts")
+        self.assertEqual(response.status_code, 200)
+        posts = response.json()["result"]["posts"]
+        self.assertEqual(posts[0]["source_post_id"], "post_a1")
+        self.assertEqual(posts[0]["engagement_count"], 120)
+        self.assertNotIn("engagement_num", posts[0])
+
+    def test_v2_validation_and_not_found_cases(self) -> None:
+        self.assertEqual(self.client.get("/api/v2/games/unknown_app").status_code, 404)
+
+        response = self.client.get("/api/v2/games/app_a/events", params={"month": "2026-13"})
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get(
+            "/api/v2/games/app_a/events",
+            params={"start_month": "2026-05", "end_month": "2026-04"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get(
+            "/api/v2/games/app_a/posts",
+            params={"publish_start": "2026-08-31", "publish_end": "2026-08-01"},
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_validation_failures_return_expected_status_codes(self) -> None:
         response = self.client.get(

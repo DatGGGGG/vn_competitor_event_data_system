@@ -29,6 +29,8 @@ Start here depending on your goal:
 - Full system handbook:
   - [System Manual](./docs/system_manual.md)
 - API:
+  - [Agent-Friendly API v2](./docs/api_v2.md)
+  - [Agent Instructions For API v2](./docs/api_v2_agent_instructions.md)
   - [Event Lookup API](./docs/api.md)
   - [Event Lookup API Technical Spec](./docs/api_technical_spec.md)
 - Deployment:
@@ -99,6 +101,13 @@ The current VM-side pipeline wrapper:
 
 ## Main API Endpoints
 
+New agents should use `/api/v2` because it separates event month buckets from actual Facebook post publish dates:
+
+- [Agent-Friendly API v2](./docs/api_v2.md)
+- [Agent Instructions For API v2](./docs/api_v2_agent_instructions.md)
+
+Legacy `/api` endpoints remain live for backward compatibility:
+
 - `GET /api/games`
 - `GET /api/events`
 - `GET /api/events/compact`
@@ -113,6 +122,7 @@ The current VM-side pipeline wrapper:
 
 Use the detailed API docs for request / response contracts:
 
+- [Agent-Friendly API v2](./docs/api_v2.md)
 - [Event Lookup API](./docs/api.md)
 - [Event Lookup API Technical Spec](./docs/api_technical_spec.md)
 

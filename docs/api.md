@@ -2,6 +2,13 @@
 
 This project exposes a read-only HTTP API on top of the SQLite warehouse.
 
+For new agents and analyst tools, prefer the clearer `/api/v2` contract:
+
+- [Agent-Friendly API v2](./api_v2.md)
+- [Agent Instructions For API v2](./api_v2_agent_instructions.md)
+
+This document describes the legacy `/api` endpoints kept for backward compatibility.
+
 Source implementation:
 
 - [api.py](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/src/vn_event_dw/api.py)

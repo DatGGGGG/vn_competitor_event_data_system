@@ -5,6 +5,13 @@ This document describes the current HTTP API contract implemented by:
 - [api.py](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/src/vn_event_dw/api.py)
 - [api_service.py](C:/Users/VEE0634/Desktop/Coding/vn_competitor_event_data_system/src/vn_event_dw/api_service.py)
 
+New agents should prefer `/api/v2`:
+
+- [Agent-Friendly API v2](./api_v2.md)
+- [Agent Instructions For API v2](./api_v2_agent_instructions.md)
+
+The legacy `/api` contract below remains available during migration.
+
 ## Base URL
 
 - Public:

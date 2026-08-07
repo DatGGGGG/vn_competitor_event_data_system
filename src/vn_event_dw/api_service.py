@@ -189,6 +189,40 @@ def fetch_games(
     return [result for result in results if _matches(result)]
 
 
+def fetch_game_detail(
+    conn: sqlite3.Connection,
+    *,
+    unified_app_id: str,
+) -> dict[str, Any] | None:
+    cleaned_app_id = unified_app_id.strip()
+    if not cleaned_app_id:
+        raise ValueError("unified_app_id is required.")
+
+    rows = conn.execute(
+        """
+        SELECT
+            unified_app_id,
+            app_name,
+            fb_page_id,
+            is_active
+        FROM config_app_mapping
+        WHERE unified_app_id = ?
+        ORDER BY LOWER(app_name), LOWER(fb_page_id)
+        """,
+        (cleaned_app_id,),
+    ).fetchall()
+    if not rows:
+        return None
+
+    app_name = next((str(row["app_name"]) for row in rows if row["app_name"]), "")
+    return {
+        "unified_app_id": cleaned_app_id,
+        "app_name": app_name,
+        "fb_page_ids": [str(row["fb_page_id"]) for row in rows],
+        "is_active": any(int(row["is_active"]) == 1 for row in rows),
+    }
+
+
 def validate_event_lookup_params(
     *,
     unified_app_ids: list[str],
@@ -407,6 +441,33 @@ def _sort_events_top(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _strip_internal_event_fields(event: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in event.items() if not key.startswith("_")}
+
+
+def fetch_events_for_game_by_months(
+    conn: sqlite3.Connection,
+    *,
+    unified_app_id: str,
+    month_buckets: tuple[str, ...] | None = None,
+    top: int | None = None,
+    event_categories: list[str] | None = None,
+    source_types: list[str] | None = None,
+    min_social_score: int | None = None,
+    has_fb_posts: bool | None = None,
+) -> list[dict[str, Any]]:
+    filters = _validate_collection_filters(
+        event_categories=event_categories,
+        source_types=source_types,
+        min_social_score=min_social_score,
+        has_fb_posts=has_fb_posts,
+    )
+    rows = _load_event_rows(
+        conn,
+        unified_app_ids=(unified_app_id.strip(),),
+        month_buckets=month_buckets,
+    )
+    filtered = _apply_event_filters(rows, filters)
+    selected = _sort_events_top(filtered)[:top] if top is not None else _sort_events_default(filtered)
+    return [_strip_internal_event_fields(event) for event in selected]
 
 
 def _load_event_rows(
@@ -878,6 +939,255 @@ def fetch_post_detail(
             share=share_num,
             view=view_num,
         ),
+    }
+
+
+def _row_to_post_dict(row: sqlite3.Row) -> dict[str, Any]:
+    reaction_num = int(row["reaction_num"])
+    comment_num = int(row["comment_num"])
+    share_num = int(row["share_num"])
+    view_num = int(row["view_num"])
+    return {
+        "source_post_id": str(row["source_post_id"]),
+        "unified_app_id": str(row["unified_app_id"]),
+        "app_name": str(row["app_name"] or ""),
+        "fb_page_id": str(row["fb_page_id"]),
+        "channel_id": str(row["channel_id"]),
+        "channel_name": str(row["channel_name"]),
+        "post_type": str(row["post_type"]),
+        "post_description": str(row["post_description"]),
+        "duration": str(row["duration"]),
+        "link": str(row["link"]),
+        "publish_time": str(row["publish_time"]),
+        "hashtag": str(row["hashtag"]),
+        "engagement": str(row["engagement"]),
+        "reaction": str(row["reaction"]),
+        "comment": str(row["comment"]),
+        "share": str(row["share"]),
+        "view": str(row["view"]),
+        "source_file": str(row["source_file"]),
+        "ingested_at": str(row["ingested_at"]),
+        "engagement_count": int(row["engagement_num"]),
+        "reaction_count": reaction_num,
+        "comment_count": comment_num,
+        "share_count": share_num,
+        "view_count": view_num,
+        "social_score": _social_score_value(
+            reaction=reaction_num,
+            comment=comment_num,
+            share=share_num,
+            view=view_num,
+        ),
+    }
+
+
+def _load_linked_events_for_posts(
+    conn: sqlite3.Connection,
+    *,
+    source_post_ids: tuple[str, ...],
+) -> dict[str, list[dict[str, str]]]:
+    if not source_post_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in source_post_ids)
+    rows = conn.execute(
+        f"""
+        SELECT
+            s.source_id AS source_post_id,
+            e.unified_event_id,
+            e.canonical_event_name,
+            e.month_bucket
+        FROM unified_event_sources s
+        JOIN unified_events e
+          ON e.unified_event_id = s.unified_event_id
+        WHERE s.source_type = 'fb_post'
+          AND s.source_id IN ({placeholders})
+        ORDER BY s.source_id, e.month_bucket, e.canonical_event_name
+        """,
+        source_post_ids,
+    ).fetchall()
+    linked: dict[str, list[dict[str, str]]] = {post_id: [] for post_id in source_post_ids}
+    for row in rows:
+        linked.setdefault(str(row["source_post_id"]), []).append(
+            {
+                "unified_event_id": str(row["unified_event_id"]),
+                "canonical_event_name": str(row["canonical_event_name"]),
+                "month_bucket": str(row["month_bucket"]),
+            }
+        )
+    return linked
+
+
+def fetch_posts_for_game(
+    conn: sqlite3.Connection,
+    *,
+    unified_app_id: str,
+    publish_start: date | None = None,
+    publish_end: date | None = None,
+    limit: int = 20,
+    q: str | None = None,
+) -> list[dict[str, Any]]:
+    cleaned_app_id = unified_app_id.strip()
+    if not cleaned_app_id:
+        raise ValueError("unified_app_id is required.")
+    if limit < 1:
+        raise ValueError("limit must be at least 1.")
+
+    clauses = ["fb.unified_app_id = ?"]
+    params: list[Any] = [cleaned_app_id]
+    if publish_start is not None:
+        clauses.append("DATE(substr(fb.publish_time, 1, 10)) >= DATE(?)")
+        params.append(publish_start.isoformat())
+    if publish_end is not None:
+        clauses.append("DATE(substr(fb.publish_time, 1, 10)) <= DATE(?)")
+        params.append(publish_end.isoformat())
+    cleaned_query = (q or "").strip()
+    if cleaned_query:
+        clauses.append("LOWER(fb.post_description) LIKE ?")
+        params.append(f"%{cleaned_query.lower()}%")
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            fb.source_post_id,
+            fb.unified_app_id,
+            MIN(m.app_name) AS app_name,
+            fb.fb_page_id,
+            fb.channel_id,
+            fb.channel_name,
+            fb.post_type,
+            fb.post_description,
+            fb.duration,
+            fb.link,
+            fb.publish_time,
+            fb.hashtag,
+            fb.engagement,
+            fb.reaction,
+            fb.comment,
+            fb.share,
+            fb.view,
+            fb.source_file,
+            fb.ingested_at,
+            {_metric_to_int_sql('fb.engagement')} AS engagement_num,
+            {_metric_to_int_sql('fb.reaction')} AS reaction_num,
+            {_metric_to_int_sql('fb.comment')} AS comment_num,
+            {_metric_to_int_sql('fb.share')} AS share_num,
+            {_metric_to_int_sql('fb.view')} AS view_num
+        FROM raw_fb_posts fb
+        LEFT JOIN config_app_mapping m
+          ON m.unified_app_id = fb.unified_app_id
+        WHERE {' AND '.join(clauses)}
+        GROUP BY
+            fb.source_post_id,
+            fb.unified_app_id,
+            fb.fb_page_id,
+            fb.channel_id,
+            fb.channel_name,
+            fb.post_type,
+            fb.post_description,
+            fb.duration,
+            fb.link,
+            fb.publish_time,
+            fb.hashtag,
+            fb.engagement,
+            fb.reaction,
+            fb.comment,
+            fb.share,
+            fb.view,
+            fb.source_file,
+            fb.ingested_at
+        ORDER BY COALESCE(fb.publish_time, '') DESC, fb.source_post_id
+        LIMIT ?
+        """,
+        [*params, limit],
+    ).fetchall()
+
+    posts = [_row_to_post_dict(row) for row in rows]
+    linked_events = _load_linked_events_for_posts(
+        conn,
+        source_post_ids=tuple(post["source_post_id"] for post in posts),
+    )
+    for post in posts:
+        post["linked_events"] = linked_events.get(post["source_post_id"], [])
+    return posts
+
+
+def fetch_post_detail_v2(
+    conn: sqlite3.Connection,
+    *,
+    source_post_id: str,
+) -> dict[str, Any] | None:
+    post = fetch_post_detail(conn, source_post_id=source_post_id)
+    if post is None:
+        return None
+    result = {
+        **post,
+        "engagement_count": post["engagement_num"],
+        "reaction_count": post["reaction_num"],
+        "comment_count": post["comment_num"],
+        "share_count": post["share_num"],
+        "view_count": post["view_num"],
+    }
+    linked_events = _load_linked_events_for_posts(conn, source_post_ids=(post["source_post_id"],))
+    result["linked_events"] = linked_events.get(post["source_post_id"], [])
+    return result
+
+
+def fetch_event_coverage_for_game_by_months(
+    conn: sqlite3.Connection,
+    *,
+    unified_app_id: str,
+    month_buckets: tuple[str, ...] | None = None,
+) -> dict[str, Any] | None:
+    game = fetch_game_detail(conn, unified_app_id=unified_app_id)
+    if game is None:
+        return None
+    filter_clause, params = _build_event_filter_clause(
+        unified_app_ids=(unified_app_id.strip(),),
+        month_buckets=month_buckets,
+    )
+    row = conn.execute(
+        f"""
+        WITH filtered_events AS (
+            SELECT
+                unified_event_id,
+                unified_app_id,
+                month_bucket
+            FROM unified_events
+            WHERE {filter_clause}
+        ),
+        linked_posts AS (
+            SELECT DISTINCT
+                e.unified_event_id,
+                s.source_id AS source_post_id
+            FROM filtered_events e
+            JOIN unified_event_sources s
+              ON s.unified_event_id = e.unified_event_id
+             AND s.source_type = 'fb_post'
+        )
+        SELECT
+            MIN(e.month_bucket) AS min_month_bucket,
+            MAX(e.month_bucket) AS max_month_bucket,
+            COUNT(DISTINCT e.month_bucket) AS months_available,
+            COUNT(DISTINCT e.unified_event_id) AS event_count,
+            COUNT(DISTINCT lp.source_post_id) AS fb_post_count,
+            MAX(fb.ingested_at) AS latest_ingested_at
+        FROM filtered_events e
+        LEFT JOIN linked_posts lp
+          ON lp.unified_event_id = e.unified_event_id
+        LEFT JOIN raw_fb_posts fb
+          ON fb.source_post_id = lp.source_post_id
+        """,
+        params,
+    ).fetchone()
+    return {
+        "unified_app_id": game["unified_app_id"],
+        "app_name": game["app_name"],
+        "min_month_bucket": row["min_month_bucket"],
+        "max_month_bucket": row["max_month_bucket"],
+        "months_available": int(row["months_available"]),
+        "event_count": int(row["event_count"]),
+        "fb_post_count": int(row["fb_post_count"]),
+        "latest_ingested_at": row["latest_ingested_at"],
     }
 
 
