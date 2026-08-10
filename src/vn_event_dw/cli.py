@@ -32,7 +32,12 @@ from .sensortower_raw import (
     resolve_tracked_targets,
 )
 from .socialdata import SocialDataClient, read_graphql_variables, read_query_text
-from .socialdata_sync import DEFAULT_SOCIALDATA_PAGE_SIZE, sync_socialdata_posts
+from .socialdata_sync import (
+    DEFAULT_SOCIALDATA_PAGE_SIZE,
+    diagnose_socialdata_game,
+    socialdata_diagnostic_failures,
+    sync_socialdata_posts,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -535,6 +540,86 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
     )
 
+    socialdata_diagnose_parser = subparsers.add_parser(
+        "diagnose-socialdata-game",
+        help="Compare the latest Socialdata posts for one configured game against raw_fb_posts.",
+    )
+    socialdata_diagnose_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    socialdata_diagnose_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
+    socialdata_diagnose_parser.add_argument("--unified-app-id", required=True, help="Game unified_app_id to inspect.")
+    socialdata_diagnose_parser.add_argument(
+        "--app-slug",
+        default=None,
+        help="Socialdata team/app slug. Defaults to SOCIALDATA_APP_SLUG or srcvn.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--since",
+        type=date.fromisoformat,
+        default=None,
+        help="Optional UTC date cutoff in YYYY-MM-DD format for missing-post checks.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=None,
+        help="Rolling overlap window in days for missing-post checks. Defaults to 10 when --since is omitted.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Number of latest Socialdata/DB posts to print. Defaults to 20; max 100.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--per-page",
+        type=int,
+        default=DEFAULT_SOCIALDATA_PAGE_SIZE,
+        help="Socialdata page size for listPost/listChannel requests. Defaults to 100.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="Return exit code 1 if the diagnostic finds no matched channel or recent Socialdata posts missing in DB.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--socialdata-base-url",
+        default=None,
+        help="Optional Socialdata base URL. Defaults to SOCIALDATA_BASE_URL or https://socialdata.garena.vn.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--usession",
+        default=None,
+        help="Optional existing Socialdata usession cookie value. Falls back to SOCIALDATA_USESSION.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--google-access-token",
+        default=None,
+        help="Optional Google access token used to exchange for a Socialdata usession cookie.",
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--google-service-account-file",
+        default=None,
+        help=(
+            "Optional Google service-account JSON credential file used to mint a short-lived access token "
+            "for Socialdata auth. Falls back to SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--google-scope",
+        action="append",
+        default=None,
+        help=(
+            "Optional Google OAuth scope for service-account token minting. Repeatable. "
+            "Defaults to SOCIALDATA_GOOGLE_SCOPES or https://www.googleapis.com/auth/userinfo.email."
+        ),
+    )
+    socialdata_diagnose_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional request timeout. Defaults to SOCIALDATA_TIMEOUT_SECONDS or 60.",
+    )
+
     return parser
 
 
@@ -1003,6 +1088,27 @@ def main() -> int:
                 ],
             }
         )
+        return 0
+
+    if args.command == "diagnose-socialdata-game":
+        client = _build_socialdata_client(args)
+        diagnostic = diagnose_socialdata_game(
+            db_path=args.db,
+            config_path=args.config,
+            client=client,
+            app_slug=args.app_slug,
+            unified_app_id=args.unified_app_id,
+            since=args.since,
+            lookback_days=args.lookback_days,
+            limit=args.limit,
+            per_page=args.per_page,
+        )
+        _emit_json_output(diagnostic)
+        failures = socialdata_diagnostic_failures(diagnostic)
+        if args.fail_on_missing and failures:
+            for failure in failures:
+                print(f"socialdata_diagnostic_failed: {failure.code}: {failure.message}")
+            return 1
         return 0
 
     parser.error("Unknown command")

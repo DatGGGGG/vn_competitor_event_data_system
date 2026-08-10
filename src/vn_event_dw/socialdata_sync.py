@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -48,6 +48,12 @@ class SocialDataSyncStats:
     listed_posts: int
     upserted_posts: int
     channel_stats: tuple[SocialDataChannelSyncStats, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SocialDataDiagnosticFailure:
+    code: str
+    message: str
 
 
 def resolve_socialdata_app_slug(app_slug: str | None) -> str:
@@ -160,6 +166,20 @@ def sync_socialdata_posts_into_connection(
         active_mappings,
     )
     _emit_progress(progress, f"socialdata_sync: app={app.slug} matched_channels={len(matched_channels)} cutoff={cutoff.isoformat()}")
+    for channel in matched_channels:
+        _emit_progress(
+            progress,
+            (
+                "socialdata_sync_matched_channel: "
+                f"unified_app_id={active_mappings[channel.sub or ''].unified_app_id} "
+                f"app_name={active_mappings[channel.sub or ''].app_name} "
+                f"fb_page_id={channel.sub or ''} "
+                f"channel_id={channel.id} "
+                f"channel_name={_repair_text(channel.name)} "
+                f"status={channel.status} "
+                f"created_at={_normalize_text(channel.created_at)}"
+            ),
+        )
 
     total_listed_posts = 0
     total_upserted_posts = 0
@@ -260,12 +280,29 @@ def _sync_channel_posts(
         if not posts:
             break
 
-        batch_has_older_posts = False
+        latest_post = _latest_socialdata_post(posts)
+        if latest_post is not None:
+            _emit_progress(
+                progress,
+                (
+                    "socialdata_sync_source_latest: "
+                    f"channel_name={channel_name} "
+                    f"channel_id={channel.id} "
+                    f"source_post_id={_source_post_id(latest_post)} "
+                    f"created_at={_normalize_text(latest_post.created_at)}"
+                ),
+            )
+
+        batch_recent_posts = 0
+        batch_older_posts = 0
         for post in posts:
             post_dt = _parse_datetime(post.created_at)
-            if post_dt is None or post_dt < cutoff:
-                batch_has_older_posts = True
+            if post_dt is None:
                 continue
+            if post_dt < cutoff:
+                batch_older_posts += 1
+                continue
+            batch_recent_posts += 1
             listed_posts += 1
             detailed_post = client.get_post(app_id=app.id, post_id=post.id, with_metrics=True)
             _upsert_socialdata_post(
@@ -289,7 +326,7 @@ def _sync_channel_posts(
                     ),
                 )
 
-        if batch_has_older_posts:
+        if batch_recent_posts == 0 and batch_older_posts > 0:
             stopped_on_cutoff = True
             _emit_progress(
                 progress,
@@ -307,6 +344,158 @@ def _sync_channel_posts(
         page += 1
 
     return listed_posts, upserted_posts, stopped_on_cutoff
+
+
+def diagnose_socialdata_game(
+    *,
+    db_path: Path,
+    config_path: Path,
+    client: SocialDataClient,
+    app_slug: str | None,
+    unified_app_id: str,
+    since: date | None = None,
+    lookback_days: int | None = None,
+    limit: int = 20,
+    per_page: int = DEFAULT_SOCIALDATA_PAGE_SIZE,
+) -> dict[str, Any]:
+    conn = open_connection(db_path)
+    try:
+        init_db(conn)
+        config = load_config(conn, config_path)
+        resolved_slug = resolve_socialdata_app_slug(app_slug)
+        app = client.app_by_slug(resolved_slug)
+        cutoff = resolve_socialdata_cutoff(since=since, lookback_days=lookback_days)
+        return diagnose_socialdata_game_into_connection(
+            conn,
+            config_app_mappings=config.app_mappings,
+            client=client,
+            app=app,
+            unified_app_id=unified_app_id,
+            cutoff=cutoff,
+            limit=limit,
+            per_page=per_page,
+        )
+    finally:
+        conn.close()
+
+
+def diagnose_socialdata_game_into_connection(
+    conn: sqlite3.Connection,
+    *,
+    config_app_mappings: tuple[AppMapping, ...],
+    client: SocialDataClient,
+    app: SocialDataApp,
+    unified_app_id: str,
+    cutoff: datetime | None = None,
+    limit: int = 20,
+    per_page: int = DEFAULT_SOCIALDATA_PAGE_SIZE,
+) -> dict[str, Any]:
+    bounded_limit = max(1, min(limit, 100))
+    active_mappings = _active_fb_page_mappings(config_app_mappings, unified_app_ids=[unified_app_id])
+    if not active_mappings:
+        raise RuntimeError(f"No active Facebook page mapping found for unified_app_id={unified_app_id}.")
+
+    channels = list(client.iter_channels(app_id=app.id, per_page=per_page))
+    matched_channels = _match_socialdata_channels(channels, active_mappings)
+    matched_by_fb_page_id = {channel.sub or "": channel for channel in matched_channels}
+
+    channel_diagnostics: list[dict[str, Any]] = []
+    socialdata_posts: list[dict[str, Any]] = []
+    for fb_page_id, mapping in sorted(active_mappings.items(), key=lambda item: item[1].app_name.lower()):
+        channel = matched_by_fb_page_id.get(fb_page_id)
+        if channel is None:
+            channel_diagnostics.append(
+                {
+                    "fb_page_id": fb_page_id,
+                    "app_name": mapping.app_name,
+                    "matched": False,
+                    "channel": None,
+                    "latest_socialdata_posts": [],
+                }
+            )
+            continue
+
+        posts, reported_total = client.list_posts(
+            app_id=app.id,
+            page=0,
+            per_page=bounded_limit,
+            sort_field="createdAt",
+            sort_order="DESC",
+            filter={"channelId": channel.id},
+        )
+        latest_posts = [_socialdata_post_preview(post, channel=channel) for post in posts[:bounded_limit]]
+        socialdata_posts.extend(latest_posts)
+        channel_diagnostics.append(
+            {
+                "fb_page_id": fb_page_id,
+                "app_name": mapping.app_name,
+                "matched": True,
+                "channel": {
+                    "channel_id": channel.id,
+                    "channel_name": _repair_text(channel.name),
+                    "channel_sub": _normalize_text(channel.sub),
+                    "status": channel.status,
+                    "created_at": _normalize_text(channel.created_at),
+                    "url": _normalize_text(channel.url),
+                    "reported_post_total": reported_total,
+                },
+                "latest_socialdata_posts": latest_posts,
+            }
+        )
+
+    socialdata_source_ids = [
+        post["source_post_id"]
+        for post in socialdata_posts
+        if post["source_post_id"] and _post_is_in_scope(post.get("created_at"), cutoff)
+    ]
+    db_source_ids = _load_db_source_post_ids(conn, socialdata_source_ids)
+    missing_source_post_ids = [source_id for source_id in socialdata_source_ids if source_id not in db_source_ids]
+    db_posts = _latest_db_posts(conn, unified_app_id=unified_app_id, limit=bounded_limit)
+
+    first_mapping = next(iter(active_mappings.values()))
+    result = {
+        "app_slug": app.slug,
+        "app_id": app.id,
+        "unified_app_id": unified_app_id,
+        "app_name": first_mapping.app_name,
+        "configured_fb_page_ids": sorted(active_mappings),
+        "cutoff_iso": cutoff.isoformat() if cutoff else None,
+        "matched_channels": len(matched_channels),
+        "socialdata_latest_created_at": _latest_datetime_text(
+            [post.get("created_at") for post in socialdata_posts]
+        ),
+        "db_latest_publish_time": _latest_datetime_text([post.get("publish_time") for post in db_posts]),
+        "latest_db_posts": db_posts,
+        "missing_source_post_ids": missing_source_post_ids,
+        "channel_diagnostics": channel_diagnostics,
+    }
+    failures = socialdata_diagnostic_failures(result)
+    result["ok"] = not failures
+    result["failures"] = [asdict(failure) for failure in failures]
+    return result
+
+
+def socialdata_diagnostic_failures(diagnostic: dict[str, Any]) -> list[SocialDataDiagnosticFailure]:
+    failures: list[SocialDataDiagnosticFailure] = []
+    if int(diagnostic.get("matched_channels") or 0) == 0:
+        failures.append(
+            SocialDataDiagnosticFailure(
+                code="no_matched_channel",
+                message="No Socialdata channel matched the configured FB page ID for this game.",
+            )
+        )
+    missing_source_post_ids = diagnostic.get("missing_source_post_ids") or []
+    if missing_source_post_ids:
+        failures.append(
+            SocialDataDiagnosticFailure(
+                code="socialdata_posts_missing_in_db",
+                message=(
+                    "Socialdata has recent source posts that are not present in raw_fb_posts: "
+                    + ", ".join(str(item) for item in missing_source_post_ids[:10])
+                ),
+            )
+        )
+    return failures
 
 
 def _upsert_socialdata_post(
@@ -356,6 +545,115 @@ def _upsert_socialdata_post(
             utc_now_iso(),
         ),
     )
+
+
+def _source_post_id(post: SocialDataPost) -> str:
+    return _normalize_text(post.sub) or str(post.id)
+
+
+def _latest_socialdata_post(posts: list[SocialDataPost]) -> SocialDataPost | None:
+    candidates = [post for post in posts if _parse_datetime(post.created_at) is not None]
+    if not candidates:
+        return posts[0] if posts else None
+    return max(candidates, key=lambda post: _parse_datetime(post.created_at) or datetime.min.replace(tzinfo=timezone.utc))
+
+
+def _socialdata_post_preview(post: SocialDataPost, *, channel: SocialDataChannel) -> dict[str, Any]:
+    return {
+        "source_post_id": _source_post_id(post),
+        "socialdata_post_id": post.id,
+        "channel_id": channel.id,
+        "channel_name": _repair_text(channel.name),
+        "fb_page_id": _normalize_text(channel.sub),
+        "created_at": _normalize_text(post.created_at),
+        "type": _socialdata_post_type_label(post.type),
+        "name": _repair_text(post.name),
+        "url": _normalize_text(post.url),
+    }
+
+
+def _latest_db_posts(
+    conn: sqlite3.Connection,
+    *,
+    unified_app_id: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT
+            source_post_id,
+            unified_app_id,
+            fb_page_id,
+            channel_id,
+            channel_name,
+            post_type,
+            publish_time,
+            ingested_at,
+            engagement,
+            reaction,
+            comment,
+            share,
+            view,
+            link,
+            substr(post_description, 1, 240) AS post_preview
+        FROM raw_fb_posts
+        WHERE unified_app_id = ?
+        ORDER BY publish_time DESC
+        LIMIT ?
+        """,
+        (unified_app_id, limit),
+    ).fetchall()
+    return [
+        {
+            "source_post_id": row["source_post_id"],
+            "unified_app_id": row["unified_app_id"],
+            "fb_page_id": row["fb_page_id"],
+            "channel_id": row["channel_id"],
+            "channel_name": row["channel_name"],
+            "post_type": row["post_type"],
+            "publish_time": row["publish_time"],
+            "ingested_at": row["ingested_at"],
+            "engagement": row["engagement"],
+            "reaction": row["reaction"],
+            "comment": row["comment"],
+            "share": row["share"],
+            "view": row["view"],
+            "link": row["link"],
+            "post_preview": row["post_preview"],
+        }
+        for row in rows
+    ]
+
+
+def _load_db_source_post_ids(conn: sqlite3.Connection, source_post_ids: list[str]) -> set[str]:
+    unique_ids = list(dict.fromkeys(source_post_ids))
+    if not unique_ids:
+        return set()
+    placeholders = ",".join("?" for _ in unique_ids)
+    rows = conn.execute(
+        f"SELECT source_post_id FROM raw_fb_posts WHERE source_post_id IN ({placeholders})",
+        unique_ids,
+    ).fetchall()
+    return {row["source_post_id"] for row in rows}
+
+
+def _post_is_in_scope(created_at: object, cutoff: datetime | None) -> bool:
+    if cutoff is None:
+        return True
+    created_dt = _parse_datetime(str(created_at or ""))
+    return created_dt is not None and created_dt >= cutoff
+
+
+def _latest_datetime_text(values: list[object]) -> str | None:
+    parsed_values: list[tuple[datetime, str]] = []
+    for value in values:
+        text = _normalize_text(value)
+        parsed = _parse_datetime(text)
+        if parsed is not None and text:
+            parsed_values.append((parsed, text))
+    if not parsed_values:
+        return None
+    return max(parsed_values, key=lambda item: item[0])[1]
 
 
 def _active_fb_page_mappings(

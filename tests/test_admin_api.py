@@ -166,6 +166,35 @@ class AdminApiTests(unittest.TestCase):
         self.assertNotIn("super-secret-token", rendered_log)
         self.assertEqual(run_mock.call_args.kwargs["env"]["ADMIN_GITHUB_TOKEN"], "super-secret-token")
 
+    def test_targeted_backfill_runs_socialdata_diagnostic_before_expensive_steps(self) -> None:
+        env = {
+            "ADMIN_CONFIG_PATH": str(self.config_path),
+            "ADMIN_JOB_DIR": str(self.job_dir),
+            "ADMIN_BACKFILL_LOOKBACK_DAYS": "30",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            settings = load_admin_settings(db_path=self.db_path)
+        store = AdminJobStore(self.job_dir)
+        job_id = store.create(title="Add tracked game: Diagnostic Test", metadata={})
+        commands: list[list[str]] = []
+
+        def fake_run_command(*args, **kwargs):
+            commands.append(args[2])
+            return admin.subprocess.CompletedProcess(args=args[2], returncode=0, stdout="", stderr="")
+
+        with patch("vn_event_dw.admin._run_command", side_effect=fake_run_command):
+            admin._run_targeted_backfill(
+                settings=settings,
+                store=store,
+                job_id=job_id,
+                unified_app_id="new_game",
+            )
+
+        command_names = [command[3] for command in commands]
+        self.assertEqual(command_names[:2], ["sync-socialdata-posts", "diagnose-socialdata-game"])
+        self.assertIn("--fail-on-missing", commands[1])
+        self.assertLess(command_names.index("diagnose-socialdata-game"), command_names.index("sync-sensortower-raw"))
+
     def test_failed_job_can_be_marked_manually_resolved(self) -> None:
         client = self._client()
         client.post("/admin/login", data="password=secret", headers={"content-type": "application/x-www-form-urlencoded"})

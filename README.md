@@ -204,6 +204,7 @@ What the UI does after a game is applied:
 - validates the JSON file
 - commits and pushes the config change to GitHub
 - syncs Socialdata posts for the new `unified_app_id`
+- verifies the newest Socialdata posts for that game landed in `raw_fb_posts`
 - syncs and loads SensorTower data for the new `unified_app_id`
 - rebuilds unified events for previous month and current month
 - verifies the game appears through `/api/games`
@@ -213,6 +214,7 @@ Operational notes:
 - The VM must have working GitHub push credentials for `git push origin main`.
 - The public read API does not require a secret, but the admin UI must always have `ADMIN_PASSWORD`.
 - If the admin job fails, open the job page shown by the UI and read the command log from top to bottom.
+- If the job fails after GitHub push, the game remains tracked; fix the operational issue and rerun targeted sync/build.
 
 ## Main CLI Workflows
 
@@ -236,6 +238,19 @@ What it does:
 - matches Socialdata channels to `config_app_mapping.fb_page_id`
 - fetches post lists and post metrics
 - upserts posts into `raw_fb_posts`
+- only stops pagination when a whole fetched page is older than the cutoff, which avoids missing recent posts on mixed-order pages
+
+Diagnose one game by comparing Socialdata source posts against DB rows:
+
+```bash
+python -m vn_event_dw.cli diagnose-socialdata-game \
+  --db data/warehouse.db \
+  --config examples/config.json \
+  --unified-app-id 5da680bb42fa0c4364eb64c8 \
+  --lookback-days 30
+```
+
+Use `--fail-on-missing` in automation to fail when Socialdata has recent posts that are not present in `raw_fb_posts`.
 
 ### 2. Sensor Tower Raw Sync
 

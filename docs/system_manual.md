@@ -211,6 +211,28 @@ What it does:
 5. fetches recent posts and metrics
 6. upserts them into `raw_fb_posts`
 
+The sync stops at the cutoff only when every post on the current Socialdata page is older than the cutoff. This protects newly onboarded games if Socialdata returns a mixed page where one older post appears before another recent post.
+
+Diagnostic command for one game:
+
+```bash
+python -m vn_event_dw.cli diagnose-socialdata-game \
+  --db data/warehouse.db \
+  --config examples/config.json \
+  --unified-app-id 5da680bb42fa0c4364eb64c8 \
+  --lookback-days 30
+```
+
+This prints:
+
+- configured FB page IDs
+- matched Socialdata channel ID/name/status
+- latest Socialdata posts
+- latest DB posts
+- recent Socialdata source post IDs missing from `raw_fb_posts`
+
+For admin/automation checks, add `--fail-on-missing`.
+
 ### Flow B: Sensor Tower raw sync
 
 Command shape:

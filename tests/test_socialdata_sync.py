@@ -6,16 +6,56 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from vn_event_dw.config import AppMapping
 from vn_event_dw.etl import init_db, load_config, open_connection
 from vn_event_dw.socialdata import SocialDataApp, SocialDataChannel, SocialDataPost
-from vn_event_dw.socialdata_sync import sync_socialdata_posts_into_connection
+from vn_event_dw.socialdata_sync import diagnose_socialdata_game_into_connection, sync_socialdata_posts_into_connection
+
+
+def _post(
+    *,
+    post_id: int,
+    source_post_id: str,
+    created_at: str,
+    name: str = "PUBG MOBILE post",
+) -> SocialDataPost:
+    return SocialDataPost(
+        id=post_id,
+        channel_id=13455,
+        sub=source_post_id,
+        alias=None,
+        type=6,
+        name=name,
+        url=f"https://www.facebook.com/PUBGMobileVN/posts/{source_post_id}",
+        tags="#PUBGMOBILEVN",
+        created_at=created_at,
+        thumbnail=None,
+        metrics=None,
+    )
 
 
 class _FakeSocialDataClient:
     def __init__(self) -> None:
         self.list_posts_calls: list[tuple[int, int]] = []
         self.get_post_calls: list[int] = []
+        self.page_posts: dict[int, tuple[list[SocialDataPost], int]] = {
+            0: (
+                [
+                    _post(
+                        post_id=43038939,
+                        source_post_id="1196807109095681",
+                        created_at="2026-06-15T15:00:54.000Z",
+                        name="Recent PUBG MOBILE post",
+                    ),
+                    _post(
+                        post_id=43038940,
+                        source_post_id="too_old",
+                        created_at="2026-05-01T00:00:00.000Z",
+                        name="Older post",
+                    ),
+                ],
+                2,
+            )
+        }
 
     def iter_channels(self, *, app_id: int, per_page: int = 100) -> list[SocialDataChannel]:
         self.last_iter_channels = (app_id, per_page)
@@ -57,39 +97,7 @@ class _FakeSocialDataClient:
         filter: dict[str, object] | None = None,
     ) -> tuple[list[SocialDataPost], int]:
         self.list_posts_calls.append((app_id, page))
-        if page > 0:
-            return [], 2
-        return (
-            [
-                SocialDataPost(
-                    id=43038939,
-                    channel_id=13455,
-                    sub="1196807109095681",
-                    alias=None,
-                    type=6,
-                    name="CÃ¢u chuyá»‡n #PUBGMOBILEVN",
-                    url="https://www.facebook.com/PUBGMobileVN/posts/pfbid123",
-                    tags="#PUBGMOBILEVN",
-                    created_at="2026-06-15T15:00:54.000Z",
-                    thumbnail=None,
-                    metrics=None,
-                ),
-                SocialDataPost(
-                    id=43038940,
-                    channel_id=13455,
-                    sub="too_old",
-                    alias=None,
-                    type=6,
-                    name="Older post",
-                    url="https://www.facebook.com/PUBGMobileVN/posts/older",
-                    tags="",
-                    created_at="2026-05-01T00:00:00.000Z",
-                    thumbnail=None,
-                    metrics=None,
-                ),
-            ],
-            2,
-        )
+        return self.page_posts.get(page, ([], 2))
 
     def get_post(
         self,
@@ -100,36 +108,40 @@ class _FakeSocialDataClient:
         metric_duration: int | None = None,
     ) -> SocialDataPost:
         self.get_post_calls.append(post_id)
-        return SocialDataPost(
-            id=post_id,
-            channel_id=13455,
-            sub="1196807109095681",
-            alias=None,
-            type=6,
-            name="CÃ¢u chuyá»‡n #PUBGMOBILEVN",
-            url="https://www.facebook.com/PUBGMobileVN/posts/pfbid123",
-            tags="#PUBGMOBILEVN",
-            created_at="2026-06-15T15:00:54.000Z",
-            thumbnail=None,
-            metrics={
-                "m0": 840,
-                "m1": 699,
-                "m2": 112,
-                "m3": 29,
-                "m4": 96128,
-                "m61": 7,
-            },
-        )
+        for posts, _total in self.page_posts.values():
+            for post in posts:
+                if post.id == post_id:
+                    return SocialDataPost(
+                        id=post.id,
+                        channel_id=post.channel_id,
+                        sub=post.sub,
+                        alias=post.alias,
+                        type=post.type,
+                        name=post.name,
+                        url=post.url,
+                        tags=post.tags,
+                        created_at=post.created_at,
+                        thumbnail=post.thumbnail,
+                        metrics={
+                            "m0": 840,
+                            "m1": 699,
+                            "m2": 112,
+                            "m3": 29,
+                            "m4": 96128,
+                            "m61": 7,
+                        },
+                    )
+        raise AssertionError(f"Unexpected post_id={post_id}")
 
 
 class SocialDataSyncTests(unittest.TestCase):
-    def test_sync_socialdata_posts_into_connection_upserts_recent_posts(self) -> None:
-        temp_root = Path.cwd() / "_tmp_socialdata_sync_test"
-        db_path = temp_root / "warehouse.db"
-        config_path = temp_root / "config.json"
-        shutil.rmtree(temp_root, ignore_errors=True)
-        temp_root.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(
+    def setUp(self) -> None:
+        self.temp_root = Path.cwd() / "_tmp_socialdata_sync_test"
+        self.db_path = self.temp_root / "warehouse.db"
+        self.config_path = self.temp_root / "config.json"
+        shutil.rmtree(self.temp_root, ignore_errors=True)
+        self.temp_root.mkdir(parents=True, exist_ok=True)
+        self.config_path.write_text(
             json.dumps(
                 {
                     "rule_keywords": [],
@@ -147,11 +159,15 @@ class SocialDataSyncTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        conn = open_connection(db_path)
+    def tearDown(self) -> None:
+        shutil.rmtree(self.temp_root, ignore_errors=True)
+
+    def test_sync_socialdata_posts_into_connection_upserts_recent_posts(self) -> None:
+        conn = open_connection(self.db_path)
         client = _FakeSocialDataClient()
         try:
             init_db(conn)
-            config = load_config(conn, config_path)
+            config = load_config(conn, self.config_path)
             stats = sync_socialdata_posts_into_connection(
                 conn,
                 config_app_mappings=config.app_mappings,
@@ -167,7 +183,7 @@ class SocialDataSyncTests(unittest.TestCase):
             self.assertEqual(stats.listed_posts, 1)
             self.assertEqual(stats.upserted_posts, 1)
             self.assertEqual(len(stats.channel_stats), 1)
-            self.assertTrue(stats.channel_stats[0].stopped_on_cutoff)
+            self.assertFalse(stats.channel_stats[0].stopped_on_cutoff)
             self.assertEqual(client.list_posts_calls, [(80, 0)])
             self.assertEqual(client.get_post_calls, [43038939])
 
@@ -186,9 +202,9 @@ class SocialDataSyncTests(unittest.TestCase):
             self.assertEqual(row["channel_id"], "13455")
             self.assertEqual(row["channel_name"], "PUBG Mobile VN")
             self.assertEqual(row["post_type"], "VIDEO")
-            self.assertEqual(row["post_description"], "Câu chuyện #PUBGMOBILEVN")
+            self.assertEqual(row["post_description"], "Recent PUBG MOBILE post")
             self.assertEqual(row["duration"], "7")
-            self.assertEqual(row["link"], "https://www.facebook.com/PUBGMobileVN/posts/pfbid123")
+            self.assertEqual(row["link"], "https://www.facebook.com/PUBGMobileVN/posts/1196807109095681")
             self.assertEqual(row["publish_time"], "2026-06-15T15:00:54.000Z")
             self.assertEqual(row["hashtag"], "#PUBGMOBILEVN")
             self.assertEqual(row["engagement"], "840")
@@ -199,7 +215,111 @@ class SocialDataSyncTests(unittest.TestCase):
             self.assertEqual(row["source_file"], "socialdata/srcvn/channel_13455.json")
         finally:
             conn.close()
-            shutil.rmtree(temp_root, ignore_errors=True)
+
+    def test_sync_does_not_stop_when_page_mixes_recent_and_old_posts(self) -> None:
+        conn = open_connection(self.db_path)
+        client = _FakeSocialDataClient()
+        client.page_posts[0] = (client.page_posts[0][0], 3)
+        client.page_posts[1] = (
+            [
+                _post(
+                    post_id=43038941,
+                    source_post_id="1196807109095682",
+                    created_at="2026-06-14T00:00:00.000Z",
+                    name="Later recent post",
+                )
+            ],
+            3,
+        )
+        try:
+            init_db(conn)
+            config = load_config(conn, self.config_path)
+            stats = sync_socialdata_posts_into_connection(
+                conn,
+                config_app_mappings=config.app_mappings,
+                client=client,
+                app=SocialDataApp(id=80, slug="srcvn", name="[VN] New Game Source"),
+                cutoff=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                per_page=2,
+                progress=None,
+            )
+
+            self.assertEqual(stats.listed_posts, 2)
+            self.assertEqual(stats.upserted_posts, 2)
+            self.assertFalse(stats.channel_stats[0].stopped_on_cutoff)
+            self.assertEqual(client.list_posts_calls, [(80, 0), (80, 1)])
+            self.assertEqual(client.get_post_calls, [43038939, 43038941])
+        finally:
+            conn.close()
+
+    def test_sync_stops_when_whole_page_is_older_than_cutoff(self) -> None:
+        conn = open_connection(self.db_path)
+        client = _FakeSocialDataClient()
+        client.page_posts[0] = (
+            [
+                _post(
+                    post_id=43038940,
+                    source_post_id="too_old",
+                    created_at="2026-05-01T00:00:00.000Z",
+                    name="Older post",
+                )
+            ],
+            2,
+        )
+        client.page_posts[1] = (
+            [
+                _post(
+                    post_id=43038941,
+                    source_post_id="should_not_fetch",
+                    created_at="2026-06-14T00:00:00.000Z",
+                )
+            ],
+            2,
+        )
+        try:
+            init_db(conn)
+            config = load_config(conn, self.config_path)
+            stats = sync_socialdata_posts_into_connection(
+                conn,
+                config_app_mappings=config.app_mappings,
+                client=client,
+                app=SocialDataApp(id=80, slug="srcvn", name="[VN] New Game Source"),
+                cutoff=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                per_page=1,
+                progress=None,
+            )
+
+            self.assertEqual(stats.listed_posts, 0)
+            self.assertEqual(stats.upserted_posts, 0)
+            self.assertTrue(stats.channel_stats[0].stopped_on_cutoff)
+            self.assertEqual(client.list_posts_calls, [(80, 0)])
+            self.assertEqual(client.get_post_calls, [])
+        finally:
+            conn.close()
+
+    def test_diagnostic_reports_socialdata_posts_missing_from_db(self) -> None:
+        conn = open_connection(self.db_path)
+        client = _FakeSocialDataClient()
+        try:
+            init_db(conn)
+            config = load_config(conn, self.config_path)
+            diagnostic = diagnose_socialdata_game_into_connection(
+                conn,
+                config_app_mappings=config.app_mappings,
+                client=client,
+                app=SocialDataApp(id=80, slug="srcvn", name="[VN] New Game Source"),
+                unified_app_id="5aad42d99f479f0a74d40440",
+                cutoff=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                limit=5,
+            )
+
+            self.assertFalse(diagnostic["ok"])
+            self.assertEqual(diagnostic["matched_channels"], 1)
+            self.assertEqual(diagnostic["missing_source_post_ids"], ["1196807109095681"])
+            self.assertEqual(diagnostic["socialdata_latest_created_at"], "2026-06-15T15:00:54.000Z")
+            self.assertIsNone(diagnostic["db_latest_publish_time"])
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":
