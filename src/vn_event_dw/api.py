@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
+from .api_auth import ApiKeyMiddleware
 from .api_v2 import create_v2_router
 from .api_service import (
     fetch_event_coverage,
@@ -262,6 +263,7 @@ def _resolve_db_path(db_path: str | Path | None) -> Path:
 def create_app(*, db_path: str | Path | None = None) -> FastAPI:
     resolved_db_path = _resolve_db_path(db_path)
     app = FastAPI(title="VN Event DW API", version="0.1.0")
+    app.add_middleware(ApiKeyMiddleware)
     app.include_router(create_v2_router(db_path=resolved_db_path))
     if admin_enabled_from_env():
         app.include_router(create_admin_router(db_path=resolved_db_path))

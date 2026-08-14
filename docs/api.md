@@ -30,6 +30,32 @@ To expose it through ngrok:
 python -m vn_event_dw.cli serve-api-ngrok --db data/warehouse.db
 ```
 
+## Authentication
+
+Set `VN_EVENT_DW_API_KEY` to require a shared key for all `/api/...` and `/api/v2/...` read endpoints.
+
+When configured, callers must send either:
+
+```text
+X-API-Key: your_api_key
+```
+
+or:
+
+```text
+Authorization: Bearer your_api_key
+```
+
+Example:
+
+```bash
+curl \
+  -H "X-API-Key: your_api_key" \
+  "https://april-refund-promoter.ngrok-free.dev/api/games"
+```
+
+If `VN_EVENT_DW_API_KEY` is blank, the read API remains public.
+
 ## Base Concepts
 
 - `unified_app_id` is the canonical game identifier.

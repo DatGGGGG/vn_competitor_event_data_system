@@ -34,7 +34,7 @@ services:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8765/api/games", timeout=5).read()
+        - import os, urllib.request; req=urllib.request.Request("http://127.0.0.1:8765/api/games", headers=({"X-API-Key": os.environ["VN_EVENT_DW_API_KEY"]} if os.environ.get("VN_EVENT_DW_API_KEY") else {})); urllib.request.urlopen(req, timeout=5).read()
       interval: 15s
       timeout: 5s
       retries: 5

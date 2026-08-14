@@ -160,6 +160,20 @@ Typical responsibilities:
 
 ### Important authentication notes
 
+#### Public read API
+
+Optional:
+
+- `VN_EVENT_DW_API_KEY`
+
+When blank, `/api/...` and `/api/v2/...` remain public.
+When set, callers must include the key in either:
+
+- `X-API-Key`
+- `Authorization: Bearer`
+
+The admin UI is separate and still uses `ADMIN_PASSWORD`.
+
 #### Socialdata
 
 Recommended unattended auth:

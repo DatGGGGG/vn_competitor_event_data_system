@@ -18,6 +18,7 @@ from urllib import parse, request
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from .api_auth import API_KEY_HEADER, api_key_from_env
 from .admin_config import (
     AdminConfigError,
     AdminGameInput,
@@ -508,7 +509,12 @@ def _run_targeted_backfill(*, settings: AdminSettings, store: AdminJobStore, job
 
 def _verify_api(*, settings: AdminSettings, store: AdminJobStore, job_id: str, unified_app_id: str) -> None:
     _job_log(store, job_id, f"Verifying API: {settings.api_verify_url}")
-    with request.urlopen(settings.api_verify_url, timeout=15) as response:
+    headers = {}
+    api_key = api_key_from_env()
+    if api_key:
+        headers[API_KEY_HEADER] = api_key
+    req = request.Request(settings.api_verify_url, headers=headers)
+    with request.urlopen(req, timeout=15) as response:
         body = response.read().decode("utf-8", errors="replace")
     if unified_app_id not in body:
         raise RuntimeError(f"API verification did not find unified_app_id={unified_app_id}")

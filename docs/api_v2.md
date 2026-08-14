@@ -11,6 +11,33 @@ Base URLs:
 - Public: `https://april-refund-promoter.ngrok-free.dev`
 - Local VM: `http://127.0.0.1:8765`
 
+## Authentication
+
+The API can be protected with a shared key by setting `VN_EVENT_DW_API_KEY` in the runtime environment.
+
+When `VN_EVENT_DW_API_KEY` is blank, `/api/...` and `/api/v2/...` are public.
+When it is set, every `/api/...` and `/api/v2/...` request must include one of:
+
+```text
+X-API-Key: your_api_key
+```
+
+or:
+
+```text
+Authorization: Bearer your_api_key
+```
+
+Example:
+
+```bash
+curl \
+  -H "X-API-Key: your_api_key" \
+  "https://april-refund-promoter.ngrok-free.dev/api/v2/games"
+```
+
+Admin pages under `/admin/...` use the separate `ADMIN_PASSWORD` login flow.
+
 ## Response Shape
 
 Collection endpoints return:

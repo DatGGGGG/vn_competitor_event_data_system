@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import uuid
 
 from fastapi.testclient import TestClient
@@ -243,6 +244,28 @@ class ApiTests(unittest.TestCase):
             response.json()["results"],
             [{"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"}],
         )
+
+    def test_api_key_is_not_required_when_env_is_unset(self) -> None:
+        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": ""}, clear=False):
+            client = TestClient(create_app(db_path=self.db_path))
+            response = client.get("/api/v2/health")
+        self.assertEqual(response.status_code, 200)
+
+    def test_api_key_protects_legacy_and_v2_api_routes(self) -> None:
+        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": "test-secret"}, clear=False):
+            client = TestClient(create_app(db_path=self.db_path))
+
+            missing = client.get("/api/games")
+            self.assertEqual(missing.status_code, 401)
+
+            invalid = client.get("/api/v2/games", headers={"X-API-Key": "wrong"})
+            self.assertEqual(invalid.status_code, 403)
+
+            legacy = client.get("/api/games", headers={"X-API-Key": "test-secret"})
+            self.assertEqual(legacy.status_code, 200)
+
+            v2 = client.get("/api/v2/games", headers={"Authorization": "Bearer test-secret"})
+            self.assertEqual(v2.status_code, 200)
 
     def test_get_events_uses_month_bucket_filtering(self) -> None:
         response = self.client.get(

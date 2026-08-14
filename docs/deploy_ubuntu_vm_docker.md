@@ -148,6 +148,7 @@ SENSORTOWER_SYNC_LOOKBACK_DAYS=3
 PIPELINE_VERIFY_API=1
 PIPELINE_VERIFY_DB=1
 PIPELINE_API_HEALTH_TIMEOUT_SECONDS=180
+VN_EVENT_DW_API_KEY=optional_shared_read_api_key
 ```
 
 Notes:
@@ -158,6 +159,7 @@ Notes:
 - `PIPELINE_UNIFIED_MONTHS` can stay blank. The VM pipeline script will then rebuild the previous month and current month automatically.
 - `PIPELINE_VERIFY_API=1` waits for the API container to become healthy after the restart step.
 - `PIPELINE_VERIFY_DB=1` prints a DB freshness summary and fails the run if the rebuilt months are missing from `unified_events`.
+- Leave `VN_EVENT_DW_API_KEY` blank to keep the public read API open. Set it to require callers to send `X-API-Key` or `Authorization: Bearer`.
 
 ## 6. Start the Stack
 
@@ -190,6 +192,13 @@ On the VM host:
 ```bash
 curl "http://127.0.0.1:8765/api/games?q=MLBB"
 curl "https://april-refund-promoter.ngrok-free.dev/api/games?q=MLBB"
+```
+
+If `VN_EVENT_DW_API_KEY` is configured:
+
+```bash
+curl -H "X-API-Key: your_shared_read_api_key" "http://127.0.0.1:8765/api/v2/games?q=MLBB"
+curl -H "X-API-Key: your_shared_read_api_key" "https://april-refund-promoter.ngrok-free.dev/api/v2/games?q=MLBB"
 ```
 
 ## 9. Run the Data Pipeline Manually

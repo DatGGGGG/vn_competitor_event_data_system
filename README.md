@@ -148,6 +148,24 @@ python -m vn_event_dw.cli summary --db data/warehouse.db
 python -m vn_event_dw.cli serve-api --db data/warehouse.db
 ```
 
+To require a shared key for `/api/...` and `/api/v2/...`, set:
+
+```bash
+VN_EVENT_DW_API_KEY=replace_with_shared_api_key
+```
+
+Callers can then use either:
+
+```bash
+curl -H "X-API-Key: replace_with_shared_api_key" "http://127.0.0.1:8765/api/v2/games"
+```
+
+or:
+
+```bash
+curl -H "Authorization: Bearer replace_with_shared_api_key" "http://127.0.0.1:8765/api/v2/games"
+```
+
 ### VM Docker Flow
 
 See:
@@ -212,7 +230,8 @@ What the UI does after a game is applied:
 Operational notes:
 
 - The VM must have working GitHub push credentials for `git push origin main`.
-- The public read API does not require a secret, but the admin UI must always have `ADMIN_PASSWORD`.
+- If `VN_EVENT_DW_API_KEY` is set, public read API callers must send that key in `X-API-Key` or `Authorization: Bearer`.
+- The admin UI always uses `ADMIN_PASSWORD`; do not reuse the API key as the admin password.
 - If the admin job fails, open the job page shown by the UI and read the command log from top to bottom.
 - If the job fails after GitHub push, the game remains tracked; fix the operational issue and rerun targeted sync/build.
 
