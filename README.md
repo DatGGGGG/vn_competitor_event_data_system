@@ -148,22 +148,36 @@ python -m vn_event_dw.cli summary --db data/warehouse.db
 python -m vn_event_dw.cli serve-api --db data/warehouse.db
 ```
 
-To require a shared key for `/api/...` and `/api/v2/...`, set:
+To require a simple shared key for `/api/...` and `/api/v2/...`, set:
 
 ```bash
 VN_EVENT_DW_API_KEY=replace_with_shared_api_key
 ```
 
+For multiple people, prefer managed keys. The raw key is printed once; only its hash is stored:
+
+```bash
+python -m vn_event_dw.cli api-key-generate --keys-file local_secrets/api_keys.json --name teammate-name
+VN_EVENT_DW_API_KEYS_FILE=local_secrets/api_keys.json python -m vn_event_dw.cli serve-api --db data/warehouse.db
+```
+
+Useful management commands:
+
+```bash
+python -m vn_event_dw.cli api-key-list --keys-file local_secrets/api_keys.json
+python -m vn_event_dw.cli api-key-revoke --keys-file local_secrets/api_keys.json --name teammate-name
+```
+
 Callers can then use either:
 
 ```bash
-curl -H "X-API-Key: replace_with_shared_api_key" "http://127.0.0.1:8765/api/v2/games"
+curl -H "X-API-Key: replace_with_api_key" "http://127.0.0.1:8765/api/v2/games"
 ```
 
 or:
 
 ```bash
-curl -H "Authorization: Bearer replace_with_shared_api_key" "http://127.0.0.1:8765/api/v2/games"
+curl -H "Authorization: Bearer replace_with_api_key" "http://127.0.0.1:8765/api/v2/games"
 ```
 
 ### VM Docker Flow
@@ -230,7 +244,7 @@ What the UI does after a game is applied:
 Operational notes:
 
 - The VM must have working GitHub push credentials for `git push origin main`.
-- If `VN_EVENT_DW_API_KEY` is set, public read API callers must send that key in `X-API-Key` or `Authorization: Bearer`.
+- If `VN_EVENT_DW_API_KEY` or `VN_EVENT_DW_API_KEYS_FILE` is set, public read API callers must send a valid key in `X-API-Key` or `Authorization: Bearer`.
 - The admin UI always uses `ADMIN_PASSWORD`; do not reuse the API key as the admin password.
 - If the admin job fails, open the job page shown by the UI and read the command log from top to bottom.
 - If the job fails after GitHub push, the game remains tracked; fix the operational issue and rerun targeted sync/build.

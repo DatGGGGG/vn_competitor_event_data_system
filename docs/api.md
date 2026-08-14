@@ -32,7 +32,17 @@ python -m vn_event_dw.cli serve-api-ngrok --db data/warehouse.db
 
 ## Authentication
 
-Set `VN_EVENT_DW_API_KEY` to require a shared key for all `/api/...` and `/api/v2/...` read endpoints.
+Set `VN_EVENT_DW_API_KEY` to require one shared key, or set `VN_EVENT_DW_API_KEYS_FILE` to use a managed JSON key store for multiple people.
+
+Recommended managed-key commands:
+
+```bash
+python -m vn_event_dw.cli api-key-generate --keys-file local_secrets/api_keys.json --name teammate-name
+python -m vn_event_dw.cli api-key-list --keys-file local_secrets/api_keys.json
+python -m vn_event_dw.cli api-key-revoke --keys-file local_secrets/api_keys.json --name teammate-name
+```
+
+The generated raw key is printed once. The key store saves only a SHA-256 hash.
 
 When configured, callers must send either:
 
@@ -54,7 +64,7 @@ curl \
   "https://april-refund-promoter.ngrok-free.dev/api/games"
 ```
 
-If `VN_EVENT_DW_API_KEY` is blank, the read API remains public.
+If both `VN_EVENT_DW_API_KEY` and `VN_EVENT_DW_API_KEYS_FILE` are blank, the read API remains public.
 
 ## Base Concepts
 

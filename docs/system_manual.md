@@ -165,9 +165,12 @@ Typical responsibilities:
 Optional:
 
 - `VN_EVENT_DW_API_KEY`
+- `VN_EVENT_DW_API_KEYS_FILE`
 
-When blank, `/api/...` and `/api/v2/...` remain public.
-When set, callers must include the key in either:
+When both are blank, `/api/...` and `/api/v2/...` remain public.
+Use `VN_EVENT_DW_API_KEY` for one simple shared key. Use `VN_EVENT_DW_API_KEYS_FILE` for the recommended multi-person setup where each person gets their own generated key and revoked keys do not affect everyone else.
+
+When protection is configured, callers must include a valid key in either:
 
 - `X-API-Key`
 - `Authorization: Bearer`

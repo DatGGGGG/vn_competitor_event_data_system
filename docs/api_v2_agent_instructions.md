@@ -2,16 +2,16 @@
 
 Use `/api/v2` for all new SeaTalk, Claude, Codex, and analyst-agent lookups.
 
-If the API returns `401` or `403`, include the shared API key provided by the system owner:
+If the API returns `401` or `403`, include the API key provided by the system owner:
 
 ```text
-X-API-Key: <shared_api_key>
+X-API-Key: <api_key>
 ```
 
 or:
 
 ```text
-Authorization: Bearer <shared_api_key>
+Authorization: Bearer <api_key>
 ```
 
 The key rule:

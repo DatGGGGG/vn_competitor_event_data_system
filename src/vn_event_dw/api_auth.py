@@ -2,17 +2,31 @@ from __future__ import annotations
 
 import os
 import secrets
+from pathlib import Path
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from .api_keys import key_matches_store
+
 API_KEY_ENV_VAR = "VN_EVENT_DW_API_KEY"
+API_KEYS_FILE_ENV_VAR = "VN_EVENT_DW_API_KEYS_FILE"
 API_KEY_HEADER = "X-API-Key"
+PUBLIC_API_PATHS = {"/api/v2/health"}
 
 
 def api_key_from_env() -> str:
     return os.getenv(API_KEY_ENV_VAR, "").strip()
+
+
+def api_keys_file_from_env() -> Path | None:
+    value = os.getenv(API_KEYS_FILE_ENV_VAR, "").strip()
+    return Path(value) if value else None
+
+
+def api_key_auth_enabled() -> bool:
+    return bool(api_key_from_env() or api_keys_file_from_env())
 
 
 def _request_api_key(request: Request) -> str:
@@ -27,12 +41,24 @@ def _request_api_key(request: Request) -> str:
     return ""
 
 
+def _is_valid_api_key(provided_key: str) -> bool:
+    expected_key = api_key_from_env()
+    if expected_key and secrets.compare_digest(provided_key, expected_key):
+        return True
+
+    keys_file = api_keys_file_from_env()
+    if keys_file is not None and keys_file.exists():
+        return key_matches_store(keys_file, api_key=provided_key)
+    return False
+
+
 class ApiKeyMiddleware(BaseHTTPMiddleware):
-    """Protect public read APIs when VN_EVENT_DW_API_KEY is configured."""
+    """Protect public read APIs when an API key env setting is configured."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        expected_key = api_key_from_env()
-        if not expected_key or not request.url.path.startswith("/api/"):
+        if not api_key_auth_enabled() or not request.url.path.startswith("/api/"):
+            return await call_next(request)
+        if request.url.path in PUBLIC_API_PATHS:
             return await call_next(request)
 
         provided_key = _request_api_key(request)
@@ -42,7 +68,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 content={"detail": f"Missing API key. Send it in the {API_KEY_HEADER} header."},
                 headers={"WWW-Authenticate": "ApiKey"},
             )
-        if not secrets.compare_digest(provided_key, expected_key):
+        if not _is_valid_api_key(provided_key):
             return JSONResponse(status_code=403, content={"detail": "Invalid API key."})
 
         return await call_next(request)

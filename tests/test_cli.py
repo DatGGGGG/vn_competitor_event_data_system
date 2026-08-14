@@ -139,6 +139,29 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(args.ngrok_authtoken)
         self.assertIsNone(args.ngrok_domain)
 
+    def test_api_key_generate_parser_defaults(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["api-key-generate", "--name", "alice"])
+        self.assertEqual(args.command, "api-key-generate")
+        self.assertEqual(args.name, "alice")
+        self.assertIsNone(args.keys_file)
+        self.assertFalse(args.json)
+
+    def test_api_key_list_parser_defaults(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["api-key-list", "--keys-file", "local_secrets/api_keys.json"])
+        self.assertEqual(args.command, "api-key-list")
+        self.assertEqual(args.keys_file, Path("local_secrets/api_keys.json"))
+        self.assertFalse(args.json)
+
+    def test_api_key_revoke_parser_defaults(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["api-key-revoke", "--name", "alice"])
+        self.assertEqual(args.command, "api-key-revoke")
+        self.assertEqual(args.name, "alice")
+        self.assertIsNone(args.keys_file)
+        self.assertFalse(args.json)
+
     def test_sync_socialdata_posts_parser_defaults(self) -> None:
         parser = build_parser()
         args = parser.parse_args(

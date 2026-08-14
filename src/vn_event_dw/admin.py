@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib import parse, request
+from urllib import parse
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .api_auth import API_KEY_HEADER, api_key_from_env
+from .api_service import fetch_game_detail
 from .admin_config import (
     AdminConfigError,
     AdminGameInput,
@@ -28,6 +28,7 @@ from .admin_config import (
     validate_payload_has_required_targets,
     write_config_payload_atomic,
 )
+from .etl import open_connection
 
 
 ADMIN_COOKIE_NAME = "vn_event_dw_admin"
@@ -233,6 +234,7 @@ def create_admin_router(*, db_path: Path) -> APIRouter:
                 "job_id": job_id,
                 "updated_payload": updated_payload,
                 "preview": preview,
+                "db_path": db_path,
             },
             daemon=True,
         )
@@ -285,6 +287,7 @@ def _run_apply_job(
     job_id: str,
     updated_payload: dict[str, Any],
     preview: Any,
+    db_path: Path,
 ) -> None:
     store.update(job_id, status="running", started_at=_utc_now())
     pre_head = None
@@ -307,7 +310,7 @@ def _run_apply_job(
         _run_targeted_backfill(settings=settings, store=store, job_id=job_id, unified_app_id=preview.unified_app_id)
 
         _job_log(store, job_id, "API restart skipped: sync step reloads config into config_app_mapping; config is bind-mounted.")
-        _verify_api(settings=settings, store=store, job_id=job_id, unified_app_id=preview.unified_app_id)
+        _verify_api(store=store, job_id=job_id, db_path=db_path, unified_app_id=preview.unified_app_id)
         store.update(job_id, status="succeeded", finished_at=_utc_now())
     except Exception as exc:
         if settings.git_enabled and not git_pushed and pre_head:
@@ -507,18 +510,16 @@ def _run_targeted_backfill(*, settings: AdminSettings, store: AdminJobStore, job
         )
 
 
-def _verify_api(*, settings: AdminSettings, store: AdminJobStore, job_id: str, unified_app_id: str) -> None:
-    _job_log(store, job_id, f"Verifying API: {settings.api_verify_url}")
-    headers = {}
-    api_key = api_key_from_env()
-    if api_key:
-        headers[API_KEY_HEADER] = api_key
-    req = request.Request(settings.api_verify_url, headers=headers)
-    with request.urlopen(req, timeout=15) as response:
-        body = response.read().decode("utf-8", errors="replace")
-    if unified_app_id not in body:
-        raise RuntimeError(f"API verification did not find unified_app_id={unified_app_id}")
-    _job_log(store, job_id, "API verification passed.")
+def _verify_api(*, store: AdminJobStore, job_id: str, db_path: Path, unified_app_id: str) -> None:
+    _job_log(store, job_id, f"Verifying DB registration for unified_app_id={unified_app_id}")
+    conn = open_connection(db_path)
+    try:
+        result = fetch_game_detail(conn, unified_app_id=unified_app_id)
+    finally:
+        conn.close()
+    if result is None:
+        raise RuntimeError(f"DB verification did not find unified_app_id={unified_app_id}")
+    _job_log(store, job_id, f"DB verification passed: {result['app_name']}")
 
 
 def _run_command(

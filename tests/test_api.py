@@ -8,6 +8,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from vn_event_dw.api import create_app
+from vn_event_dw.api_keys import add_api_key
 from vn_event_dw.etl import init_db, open_connection
 
 
@@ -246,14 +247,17 @@ class ApiTests(unittest.TestCase):
         )
 
     def test_api_key_is_not_required_when_env_is_unset(self) -> None:
-        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": ""}, clear=False):
+        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": "", "VN_EVENT_DW_API_KEYS_FILE": ""}, clear=False):
             client = TestClient(create_app(db_path=self.db_path))
             response = client.get("/api/v2/health")
         self.assertEqual(response.status_code, 200)
 
     def test_api_key_protects_legacy_and_v2_api_routes(self) -> None:
-        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": "test-secret"}, clear=False):
+        with patch.dict("os.environ", {"VN_EVENT_DW_API_KEY": "test-secret", "VN_EVENT_DW_API_KEYS_FILE": ""}, clear=False):
             client = TestClient(create_app(db_path=self.db_path))
+
+            public_health = client.get("/api/v2/health")
+            self.assertEqual(public_health.status_code, 200)
 
             missing = client.get("/api/games")
             self.assertEqual(missing.status_code, 401)
@@ -266,6 +270,32 @@ class ApiTests(unittest.TestCase):
 
             v2 = client.get("/api/v2/games", headers={"Authorization": "Bearer test-secret"})
             self.assertEqual(v2.status_code, 200)
+
+    def test_api_key_store_protects_read_routes(self) -> None:
+        keys_file = DATA_DIR / f"test_api_keys_{uuid.uuid4().hex}.json"
+        generated = add_api_key(keys_file, name="alice")
+        try:
+            with patch.dict(
+                "os.environ",
+                {"VN_EVENT_DW_API_KEY": "", "VN_EVENT_DW_API_KEYS_FILE": str(keys_file)},
+                clear=False,
+            ):
+                client = TestClient(create_app(db_path=self.db_path))
+
+                public_health = client.get("/api/v2/health")
+                self.assertEqual(public_health.status_code, 200)
+
+                missing = client.get("/api/v2/games")
+                self.assertEqual(missing.status_code, 401)
+
+                invalid = client.get("/api/v2/games", headers={"X-API-Key": "wrong"})
+                self.assertEqual(invalid.status_code, 403)
+
+                valid = client.get("/api/v2/games", headers={"X-API-Key": generated.key})
+                self.assertEqual(valid.status_code, 200)
+        finally:
+            if keys_file.exists():
+                keys_file.unlink()
 
     def test_get_events_uses_month_bucket_filtering(self) -> None:
         response = self.client.get(

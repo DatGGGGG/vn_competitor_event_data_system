@@ -13,10 +13,19 @@ Base URLs:
 
 ## Authentication
 
-The API can be protected with a shared key by setting `VN_EVENT_DW_API_KEY` in the runtime environment.
+The API can be protected with a shared key by setting `VN_EVENT_DW_API_KEY`, or with a managed key store by setting `VN_EVENT_DW_API_KEYS_FILE`.
 
-When `VN_EVENT_DW_API_KEY` is blank, `/api/...` and `/api/v2/...` are public.
-When it is set, every `/api/...` and `/api/v2/...` request must include one of:
+When both values are blank, `/api/...` and `/api/v2/...` are public. `/api/v2/health` stays public so Docker/ngrok health checks can keep working.
+
+For multiple teammates, generate one key per person:
+
+```bash
+python -m vn_event_dw.cli api-key-generate --keys-file local_secrets/api_keys.json --name teammate-name
+python -m vn_event_dw.cli api-key-list --keys-file local_secrets/api_keys.json
+python -m vn_event_dw.cli api-key-revoke --keys-file local_secrets/api_keys.json --name teammate-name
+```
+
+When protection is configured, every `/api/...` and `/api/v2/...` request except `/api/v2/health` must include one of:
 
 ```text
 X-API-Key: your_api_key

@@ -9,6 +9,8 @@ from pathlib import Path
 import uvicorn
 
 from .api import create_app
+from .api_auth import API_KEYS_FILE_ENV_VAR, api_keys_file_from_env
+from .api_keys import add_api_key, list_api_keys, revoke_api_key
 from .config import default_sensortower_raw_dir, load_pipeline_config
 from .etl import open_connection, init_db, reload_fb_posts, run_etl, summarize_db
 from .environment import load_environment_files
@@ -217,6 +219,38 @@ def build_parser() -> argparse.ArgumentParser:
 
     summary_parser = subparsers.add_parser("summary", help="Print warehouse table counts")
     summary_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+
+    api_key_generate_parser = subparsers.add_parser(
+        "api-key-generate",
+        help="Generate a named API key and store only its hash in the API key store.",
+    )
+    api_key_generate_parser.add_argument("--name", required=True, help="Human-readable key owner/name.")
+    api_key_generate_parser.add_argument(
+        "--keys-file",
+        type=Path,
+        default=None,
+        help=f"API key store JSON path. Defaults to {API_KEYS_FILE_ENV_VAR}.",
+    )
+    api_key_generate_parser.add_argument("--json", action="store_true", help="Emit JSON output.")
+
+    api_key_list_parser = subparsers.add_parser("api-key-list", help="List API key metadata without secrets.")
+    api_key_list_parser.add_argument(
+        "--keys-file",
+        type=Path,
+        default=None,
+        help=f"API key store JSON path. Defaults to {API_KEYS_FILE_ENV_VAR}.",
+    )
+    api_key_list_parser.add_argument("--json", action="store_true", help="Emit JSON output.")
+
+    api_key_revoke_parser = subparsers.add_parser("api-key-revoke", help="Revoke one active API key by name.")
+    api_key_revoke_parser.add_argument("--name", required=True, help="Human-readable key owner/name.")
+    api_key_revoke_parser.add_argument(
+        "--keys-file",
+        type=Path,
+        default=None,
+        help=f"API key store JSON path. Defaults to {API_KEYS_FILE_ENV_VAR}.",
+    )
+    api_key_revoke_parser.add_argument("--json", action="store_true", help="Emit JSON output.")
 
     socialdata_auth_parser = subparsers.add_parser(
         "socialdata-auth-check",
@@ -650,6 +684,15 @@ def _emit_json_output(payload: dict[str, object], *, output_path: Path | None = 
     print(rendered)
 
 
+def _resolve_api_keys_file(args: argparse.Namespace) -> Path:
+    if getattr(args, "keys_file", None) is not None:
+        return args.keys_file
+    env_path = api_keys_file_from_env()
+    if env_path is not None:
+        return env_path
+    raise RuntimeError(f"Pass --keys-file or set {API_KEYS_FILE_ENV_VAR}.")
+
+
 def run_sensortower_raw_extract(
     *,
     config_path: Path,
@@ -981,6 +1024,50 @@ def main() -> int:
         summary = summarize_db(args.db)
         for table_name, count in summary.items():
             print(f"{table_name}: {count}")
+        return 0
+
+    if args.command == "api-key-generate":
+        result = add_api_key(_resolve_api_keys_file(args), name=args.name)
+        payload = {
+            "name": result.name,
+            "api_key": result.key,
+            "key_prefix": result.key_prefix,
+            "created_at": result.created_at,
+            "keys_file": str(result.keys_file),
+            "warning": "Save api_key now. It is shown once and only its hash is stored.",
+        }
+        if args.json:
+            _emit_json_output(payload)
+            return 0
+        print(f"api_key_generated name={result.name} key_prefix={result.key_prefix} keys_file={result.keys_file}")
+        print("Save this key now. It is shown once and only its hash is stored.")
+        print(result.key)
+        return 0
+
+    if args.command == "api-key-list":
+        keys_file = _resolve_api_keys_file(args)
+        payload = {"keys_file": str(keys_file), "keys": list_api_keys(keys_file)}
+        if args.json:
+            _emit_json_output(payload)
+            return 0
+        print(f"api_keys keys_file={keys_file}")
+        for item in payload["keys"]:
+            status = "active" if item["active"] else "revoked"
+            print(
+                f"{item['name']}\t{status}\t"
+                f"prefix={item['key_prefix']}\tcreated_at={item['created_at']}\trevoked_at={item['revoked_at']}"
+            )
+        return 0
+
+    if args.command == "api-key-revoke":
+        result = revoke_api_key(_resolve_api_keys_file(args), name=args.name)
+        if args.json:
+            _emit_json_output(result)
+            return 0
+        print(
+            f"api_key_revoked name={result['name']} "
+            f"key_prefix={result['key_prefix']} revoked_at={result['revoked_at']}"
+        )
         return 0
 
     if args.command == "socialdata-auth-check":
