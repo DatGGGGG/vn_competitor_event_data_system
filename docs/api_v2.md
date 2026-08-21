@@ -1,21 +1,21 @@
 # Event Lookup API v2
 
-`/api/v2` is the agent-friendly API surface for event and Facebook post lookup.
-It keeps the old `/api/...` endpoints live while making one distinction explicit:
+`/api/events/v2` is the agent-friendly Event API surface for event and Facebook post lookup.
+It keeps the legacy `/api/v2/...` and old `/api/...` endpoints live while making one distinction explicit:
 
 - event endpoints filter by `unified_events.month_bucket`
 - raw post endpoints filter by `raw_fb_posts.publish_time`
 
 Base URLs:
 
-- Public: `https://april-refund-promoter.ngrok-free.dev`
+- Public: `https://market-data.garena.vn`
 - Local VM: `http://127.0.0.1:8765`
 
 ## Authentication
 
 The API can be protected with a shared key by setting `VN_EVENT_DW_API_KEY`, or with a managed key store by setting `VN_EVENT_DW_API_KEYS_FILE`.
 
-When both values are blank, `/api/...` and `/api/v2/...` are public. `/api/v2/health` stays public so Docker/ngrok health checks can keep working.
+When both values are blank, `/api/...`, `/api/v2/...`, and `/api/events/v2/...` are public. `/api/events/v2/health` and `/api/v2/health` stay public so Docker health checks can keep working.
 
 For multiple teammates, generate one key per person:
 
@@ -25,7 +25,7 @@ python -m vn_event_dw.cli api-key-list --keys-file local_secrets/api_keys.json
 python -m vn_event_dw.cli api-key-revoke --keys-file local_secrets/api_keys.json --name teammate-name
 ```
 
-When protection is configured, every `/api/...` and `/api/v2/...` request except `/api/v2/health` must include one of:
+When protection is configured, every `/api/...`, `/api/v2/...`, and `/api/events/v2/...` request except health endpoints must include one of:
 
 ```text
 X-API-Key: your_api_key
@@ -42,7 +42,7 @@ Example:
 ```bash
 curl \
   -H "X-API-Key: your_api_key" \
-  "https://april-refund-promoter.ngrok-free.dev/api/v2/games"
+  "https://market-data.garena.vn/api/events/v2/games"
 ```
 
 Admin pages under `/admin/...` use the separate `ADMIN_PASSWORD` login flow.
@@ -68,11 +68,13 @@ Single-resource endpoints return `result` plus the same `meta` block.
 
 ## Endpoints
 
-### `GET /api/v2/health`
+### `GET /api/events/v2/health`
 
 Lists available v2 endpoints.
 
-### `GET /api/v2/games`
+Legacy alias: `GET /api/v2/health`
+
+### `GET /api/events/v2/games`
 
 Lists tracked games.
 
@@ -80,11 +82,15 @@ Query params:
 
 - `q`, optional search text
 
-### `GET /api/v2/games/{unified_app_id}`
+Legacy alias: `GET /api/v2/games`
+
+### `GET /api/events/v2/games/{unified_app_id}`
 
 Returns one tracked game with its configured Facebook page IDs.
 
-### `GET /api/v2/games/{unified_app_id}/events`
+Legacy alias: `GET /api/v2/games/{unified_app_id}`
+
+### `GET /api/events/v2/games/{unified_app_id}/events`
 
 Lists events for one game.
 
@@ -103,16 +109,20 @@ Query params:
 Example:
 
 ```bash
-curl "https://april-refund-promoter.ngrok-free.dev/api/v2/games/5da680bb42fa0c4364eb64c8/events?month=2026-08"
+curl "https://market-data.garena.vn/api/events/v2/games/5da680bb42fa0c4364eb64c8/events?month=2026-08"
 ```
 
-### `GET /api/v2/games/{unified_app_id}/events/summary`
+Legacy alias: `GET /api/v2/games/{unified_app_id}/events`
+
+### `GET /api/events/v2/games/{unified_app_id}/events/summary`
 
 Aggregates event counts and FB metrics for one game.
 
 Uses the same event month-bucket filters as `/events`.
 
-### `GET /api/v2/games/{unified_app_id}/events/search`
+Legacy alias: `GET /api/v2/games/{unified_app_id}/events/summary`
+
+### `GET /api/events/v2/games/{unified_app_id}/events/search`
 
 Fuzzy event-name search scoped to one game, with cross-game fallback behavior inherited from the event search service.
 
@@ -123,13 +133,17 @@ Query params:
 - or `start_month=YYYY-MM&end_month=YYYY-MM`
 - `top`, default `10`
 
-### `GET /api/v2/games/{unified_app_id}/events/coverage`
+Legacy alias: `GET /api/v2/games/{unified_app_id}/events/search`
+
+### `GET /api/events/v2/games/{unified_app_id}/events/coverage`
 
 Returns event coverage/freshness for one game.
 
 Uses event month buckets when month filters are provided.
 
-### `GET /api/v2/games/{unified_app_id}/posts`
+Legacy alias: `GET /api/v2/games/{unified_app_id}/events/coverage`
+
+### `GET /api/events/v2/games/{unified_app_id}/posts`
 
 Lists raw Facebook posts for one game, even if the posts are not linked to any event.
 
@@ -169,29 +183,39 @@ Each post includes:
 Example:
 
 ```bash
-curl "https://april-refund-promoter.ngrok-free.dev/api/v2/games/5da680bb42fa0c4364eb64c8/posts?publish_start=2026-08-01&publish_end=2026-08-31"
+curl "https://market-data.garena.vn/api/events/v2/games/5da680bb42fa0c4364eb64c8/posts?publish_start=2026-08-01&publish_end=2026-08-31"
 ```
 
-### `GET /api/v2/events/{unified_event_id}`
+Legacy alias: `GET /api/v2/games/{unified_app_id}/posts`
+
+### `GET /api/events/v2/events/{unified_event_id}`
 
 Returns one event detail row.
 
-### `GET /api/v2/events/{unified_event_id}/post-stats`
+Legacy alias: `GET /api/v2/events/{unified_event_id}`
+
+### `GET /api/events/v2/events/{unified_event_id}/post-stats`
 
 Returns FB post totals linked to one event.
 
-### `GET /api/v2/events/{unified_event_id}/posts`
+Legacy alias: `GET /api/v2/events/{unified_event_id}/post-stats`
+
+### `GET /api/events/v2/events/{unified_event_id}/posts`
 
 Returns posts linked to one event using v2 metric field names.
 
-### `GET /api/v2/posts/{source_post_id}`
+Legacy alias: `GET /api/v2/events/{unified_event_id}/posts`
+
+### `GET /api/events/v2/posts/{source_post_id}`
 
 Returns one raw FB post with normalized metrics and linked event references.
 
+Legacy alias: `GET /api/v2/posts/{source_post_id}`
+
 ## Agent Guidance
 
-Use `/api/v2/games/{game_id}/posts` to answer raw post questions.
+Use `/api/events/v2/games/{game_id}/posts` to answer raw post questions.
 Do not infer post publish dates from event `month_bucket`.
 
-Use `/api/v2/games/{game_id}/events` or `/events/summary` to answer event questions.
+Use `/api/events/v2/games/{game_id}/events` or `/events/summary` to answer event questions.
 When reporting event results, describe `month_bucket` as the event bucket used by the warehouse, not as the actual date of every linked post.

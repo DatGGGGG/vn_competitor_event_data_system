@@ -167,7 +167,7 @@ Optional:
 - `VN_EVENT_DW_API_KEY`
 - `VN_EVENT_DW_API_KEYS_FILE`
 
-When both are blank, `/api/...` and `/api/v2/...` remain public.
+When both are blank, `/api/...`, `/api/v2/...`, and `/api/events/v2/...` remain public.
 Use `VN_EVENT_DW_API_KEY` for one simple shared key. Use `VN_EVENT_DW_API_KEYS_FILE` for the recommended multi-person setup where each person gets their own generated key and revoked keys do not affect everyone else.
 
 When protection is configured, callers must include a valid key in either:
@@ -316,7 +316,7 @@ Full deployment guide:
 
 The system exposes a read-only event API.
 
-New agents should use the `/api/v2` endpoints because they distinguish event `month_bucket` filters from actual FB post `publish_time` filters.
+New agents should use the `/api/events/v2` endpoints because they distinguish event `month_bucket` filters from actual FB post `publish_time` filters and fit the shared `market-data.garena.vn` API namespace.
 
 Recommended v2 docs:
 

@@ -2,7 +2,7 @@
 
 This project exposes a read-only HTTP API on top of the SQLite warehouse.
 
-For new agents and analyst tools, prefer the clearer `/api/v2` contract:
+For new agents and analyst tools, prefer the clearer `/api/events/v2` contract:
 
 - [Agent-Friendly API v2](./api_v2.md)
 - [Agent Instructions For API v2](./api_v2_agent_instructions.md)
@@ -61,7 +61,7 @@ Example:
 ```bash
 curl \
   -H "X-API-Key: your_api_key" \
-  "https://april-refund-promoter.ngrok-free.dev/api/games"
+  "https://market-data.garena.vn/api/events/v2/games"
 ```
 
 If both `VN_EVENT_DW_API_KEY` and `VN_EVENT_DW_API_KEYS_FILE` are blank, the read API remains public.

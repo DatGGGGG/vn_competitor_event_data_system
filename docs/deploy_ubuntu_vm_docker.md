@@ -220,8 +220,8 @@ curl "https://april-refund-promoter.ngrok-free.dev/api/games?q=MLBB"
 If API key protection is configured:
 
 ```bash
-curl -H "X-API-Key: your_read_api_key" "http://127.0.0.1:8765/api/v2/games?q=MLBB"
-curl -H "X-API-Key: your_read_api_key" "https://april-refund-promoter.ngrok-free.dev/api/v2/games?q=MLBB"
+curl -H "X-API-Key: your_read_api_key" "http://127.0.0.1:8765/api/events/v2/games?q=MLBB"
+curl -H "X-API-Key: your_read_api_key" "https://market-data.garena.vn/api/events/v2/games?q=MLBB"
 ```
 
 ## 9. Run the Data Pipeline Manually

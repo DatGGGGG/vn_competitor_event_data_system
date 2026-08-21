@@ -357,27 +357,30 @@ def _event_summary(*, game: dict[str, Any], events: list[dict[str, Any]]) -> dic
 def create_v2_router(*, db_path: str | Path) -> APIRouter:
     router = APIRouter()
 
+    @router.get("/api/events/v2/health", response_model=V2HealthResponse)
     @router.get("/api/v2/health", response_model=V2HealthResponse)
     def get_health() -> V2HealthResponse:
         endpoints = [
-            "GET /api/v2/health",
-            "GET /api/v2/games",
-            "GET /api/v2/games/{unified_app_id}",
-            "GET /api/v2/games/{unified_app_id}/events",
-            "GET /api/v2/games/{unified_app_id}/events/summary",
-            "GET /api/v2/games/{unified_app_id}/events/search",
-            "GET /api/v2/games/{unified_app_id}/events/coverage",
-            "GET /api/v2/games/{unified_app_id}/posts",
-            "GET /api/v2/events/{unified_event_id}",
-            "GET /api/v2/events/{unified_event_id}/post-stats",
-            "GET /api/v2/events/{unified_event_id}/posts",
-            "GET /api/v2/posts/{source_post_id}",
+            "GET /api/events/v2/health",
+            "GET /api/events/v2/games",
+            "GET /api/events/v2/games/{unified_app_id}",
+            "GET /api/events/v2/games/{unified_app_id}/events",
+            "GET /api/events/v2/games/{unified_app_id}/events/summary",
+            "GET /api/events/v2/games/{unified_app_id}/events/search",
+            "GET /api/events/v2/games/{unified_app_id}/events/coverage",
+            "GET /api/events/v2/games/{unified_app_id}/posts",
+            "GET /api/events/v2/events/{unified_event_id}",
+            "GET /api/events/v2/events/{unified_event_id}/post-stats",
+            "GET /api/events/v2/events/{unified_event_id}/posts",
+            "GET /api/events/v2/posts/{source_post_id}",
+            "Legacy alias: GET /api/v2/...",
         ]
         return V2HealthResponse(
             result={"status": "ok", "endpoints": endpoints},
             meta=_meta(scope={}, semantics="api_metadata", count=len(endpoints)),
         )
 
+    @router.get("/api/events/v2/games", response_model=V2GamesResponse)
     @router.get("/api/v2/games", response_model=V2GamesResponse)
     def get_games(q: Annotated[str | None, Query(min_length=1)] = None) -> V2GamesResponse:
         conn = open_connection(db_path)
@@ -390,6 +393,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             meta=_meta(scope={"q": q}, semantics="registered_games", count=len(results)),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}/events", response_model=V2EventsResponse)
     @router.get("/api/v2/games/{unified_app_id}/events", response_model=V2EventsResponse)
     def get_game_events(
         unified_app_id: str,
@@ -427,6 +431,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             ),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}/events/summary", response_model=V2EventSummaryResponse)
     @router.get("/api/v2/games/{unified_app_id}/events/summary", response_model=V2EventSummaryResponse)
     def get_game_event_summary(
         unified_app_id: str,
@@ -463,6 +468,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             ),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}/events/search", response_model=V2EventSearchResponse)
     @router.get("/api/v2/games/{unified_app_id}/events/search", response_model=V2EventSearchResponse)
     def search_game_events(
         unified_app_id: str,
@@ -500,6 +506,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             ),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}/events/coverage", response_model=V2EventCoverageResponse)
     @router.get("/api/v2/games/{unified_app_id}/events/coverage", response_model=V2EventCoverageResponse)
     def get_game_event_coverage(
         unified_app_id: str,
@@ -528,6 +535,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             ),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}/posts", response_model=V2PostsResponse)
     @router.get("/api/v2/games/{unified_app_id}/posts", response_model=V2PostsResponse)
     def get_game_posts(
         unified_app_id: str,
@@ -565,6 +573,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             ),
         )
 
+    @router.get("/api/events/v2/games/{unified_app_id}", response_model=V2GameDetailResponse)
     @router.get("/api/v2/games/{unified_app_id}", response_model=V2GameDetailResponse)
     def get_game(unified_app_id: str) -> V2GameDetailResponse:
         conn = open_connection(db_path)
@@ -577,6 +586,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             meta=_meta(scope={"unified_app_id": unified_app_id}, semantics="registered_game_detail", count=1),
         )
 
+    @router.get("/api/events/v2/events/{unified_event_id}/post-stats", response_model=V2EventPostStatsResponse)
     @router.get("/api/v2/events/{unified_event_id}/post-stats", response_model=V2EventPostStatsResponse)
     def get_event_post_stats(unified_event_id: str) -> V2EventPostStatsResponse:
         conn = open_connection(db_path)
@@ -591,6 +601,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             meta=_meta(scope={"unified_event_id": unified_event_id}, semantics="event_linked_fb_post_metrics", count=1),
         )
 
+    @router.get("/api/events/v2/events/{unified_event_id}/posts", response_model=V2EventPostsResponse)
     @router.get("/api/v2/events/{unified_event_id}/posts", response_model=V2EventPostsResponse)
     def get_event_posts(unified_event_id: str) -> V2EventPostsResponse:
         conn = open_connection(db_path)
@@ -621,6 +632,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             meta=_meta(scope={"unified_event_id": unified_event_id}, semantics="event_linked_posts", count=len(result["posts"])),
         )
 
+    @router.get("/api/events/v2/events/{unified_event_id}", response_model=V2EventDetailResponse)
     @router.get("/api/v2/events/{unified_event_id}", response_model=V2EventDetailResponse)
     def get_event(unified_event_id: str) -> V2EventDetailResponse:
         conn = open_connection(db_path)
@@ -635,6 +647,7 @@ def create_v2_router(*, db_path: str | Path) -> APIRouter:
             meta=_meta(scope={"unified_event_id": unified_event_id}, semantics="event_detail", count=1),
         )
 
+    @router.get("/api/events/v2/posts/{source_post_id}", response_model=V2PostDetailResponse)
     @router.get("/api/v2/posts/{source_post_id}", response_model=V2PostDetailResponse)
     def get_post(source_post_id: str) -> V2PostDetailResponse:
         conn = open_connection(db_path)

@@ -13,7 +13,7 @@ from .api_keys import key_matches_store
 API_KEY_ENV_VAR = "VN_EVENT_DW_API_KEY"
 API_KEYS_FILE_ENV_VAR = "VN_EVENT_DW_API_KEYS_FILE"
 API_KEY_HEADER = "X-API-Key"
-PUBLIC_API_PATHS = {"/api/v2/health"}
+PUBLIC_API_PATHS = {"/api/v2/health", "/api/events/v2/health"}
 
 
 def api_key_from_env() -> str:

@@ -101,7 +101,7 @@ The current VM-side pipeline wrapper:
 
 ## Main API Endpoints
 
-New agents should use `/api/v2` because it separates event month buckets from actual Facebook post publish dates:
+New agents should use `/api/events/v2` because it separates event month buckets from actual Facebook post publish dates and fits the shared `market-data.garena.vn` API namespace:
 
 - [Agent-Friendly API v2](./docs/api_v2.md)
 - [Agent Instructions For API v2](./docs/api_v2_agent_instructions.md)
@@ -148,7 +148,7 @@ python -m vn_event_dw.cli summary --db data/warehouse.db
 python -m vn_event_dw.cli serve-api --db data/warehouse.db
 ```
 
-To require a simple shared key for `/api/...` and `/api/v2/...`, set:
+To require a simple shared key for `/api/...`, `/api/v2/...`, and `/api/events/v2/...`, set:
 
 ```bash
 VN_EVENT_DW_API_KEY=replace_with_shared_api_key
@@ -171,13 +171,13 @@ python -m vn_event_dw.cli api-key-revoke --keys-file local_secrets/api_keys.json
 Callers can then use either:
 
 ```bash
-curl -H "X-API-Key: replace_with_api_key" "http://127.0.0.1:8765/api/v2/games"
+curl -H "X-API-Key: replace_with_api_key" "http://127.0.0.1:8765/api/events/v2/games"
 ```
 
 or:
 
 ```bash
-curl -H "Authorization: Bearer replace_with_api_key" "http://127.0.0.1:8765/api/v2/games"
+curl -H "Authorization: Bearer replace_with_api_key" "http://127.0.0.1:8765/api/events/v2/games"
 ```
 
 ### VM Docker Flow
@@ -226,7 +226,7 @@ sudo docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-comp
 Then open:
 
 ```text
-https://april-refund-promoter.ngrok-free.dev/admin/games
+https://market-data.garena.vn/admin/games
 ```
 
 What the UI does after a game is applied:

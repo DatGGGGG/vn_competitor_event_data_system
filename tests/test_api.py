@@ -265,11 +265,17 @@ class ApiTests(unittest.TestCase):
             invalid = client.get("/api/v2/games", headers={"X-API-Key": "wrong"})
             self.assertEqual(invalid.status_code, 403)
 
+            namespaced_invalid = client.get("/api/events/v2/games", headers={"X-API-Key": "wrong"})
+            self.assertEqual(namespaced_invalid.status_code, 403)
+
             legacy = client.get("/api/games", headers={"X-API-Key": "test-secret"})
             self.assertEqual(legacy.status_code, 200)
 
             v2 = client.get("/api/v2/games", headers={"Authorization": "Bearer test-secret"})
             self.assertEqual(v2.status_code, 200)
+
+            namespaced_v2 = client.get("/api/events/v2/games", headers={"Authorization": "Bearer test-secret"})
+            self.assertEqual(namespaced_v2.status_code, 200)
 
     def test_api_key_store_protects_read_routes(self) -> None:
         keys_file = DATA_DIR / f"test_api_keys_{uuid.uuid4().hex}.json"
@@ -293,6 +299,9 @@ class ApiTests(unittest.TestCase):
 
                 valid = client.get("/api/v2/games", headers={"X-API-Key": generated.key})
                 self.assertEqual(valid.status_code, 200)
+
+                namespaced_valid = client.get("/api/events/v2/games", headers={"X-API-Key": generated.key})
+                self.assertEqual(namespaced_valid.status_code, 200)
         finally:
             if keys_file.exists():
                 keys_file.unlink()
@@ -658,7 +667,8 @@ class ApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["result"]["status"], "ok")
         self.assertEqual(payload["meta"]["api_version"], "v2")
-        self.assertIn("GET /api/v2/games/{unified_app_id}/posts", payload["result"]["endpoints"])
+        self.assertIn("GET /api/events/v2/games/{unified_app_id}/posts", payload["result"]["endpoints"])
+        self.assertIn("Legacy alias: GET /api/v2/...", payload["result"]["endpoints"])
 
         response = self.client.get("/api/v2/games", params={"q": "MLBB"})
         self.assertEqual(response.status_code, 200)
@@ -666,6 +676,28 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["results"], [{"unified_app_id": "mlbb_app", "app_name": "Mobile Legends: Bang Bang"}])
         self.assertEqual(payload["meta"]["semantics"], "registered_games")
         self.assertEqual(payload["meta"]["count"], 1)
+
+    def test_events_v2_namespace_alias_matches_legacy_v2(self) -> None:
+        legacy_response = self.client.get(
+            "/api/v2/games/app_a/posts",
+            params={"publish_start": "2026-08-01", "publish_end": "2026-08-31"},
+        )
+        namespaced_response = self.client.get(
+            "/api/events/v2/games/app_a/posts",
+            params={"publish_start": "2026-08-01", "publish_end": "2026-08-31"},
+        )
+
+        self.assertEqual(legacy_response.status_code, 200)
+        self.assertEqual(namespaced_response.status_code, 200)
+        legacy_payload = legacy_response.json()
+        namespaced_payload = namespaced_response.json()
+        self.assertEqual(namespaced_payload["results"], legacy_payload["results"])
+        self.assertEqual(namespaced_payload["meta"]["semantics"], legacy_payload["meta"]["semantics"])
+        self.assertEqual(namespaced_payload["meta"]["scope"], legacy_payload["meta"]["scope"])
+
+        detail_response = self.client.get("/api/events/v2/posts/post_a1")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["result"]["source_post_id"], "post_a1")
 
     def test_v2_game_detail_returns_registered_game(self) -> None:
         response = self.client.get("/api/v2/games/app_a")
