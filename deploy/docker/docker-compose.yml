@@ -5,6 +5,8 @@ x-vn-event-dw-base: &vn_event_dw_base
   image: vn-event-dw-api:latest
   env_file:
     - ./pipeline.env
+    # Model policy is version-controlled and intentionally overrides VM-local values.
+    - ./pipeline.models.env
   environment:
     SENSOR_TOWER_RAW_DIR: /app/data_ingest/sensortower/raw
   volumes:

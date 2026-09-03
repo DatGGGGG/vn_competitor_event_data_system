@@ -141,8 +141,6 @@ SOCIALDATA_GOOGLE_SCOPES=https://www.googleapis.com/auth/userinfo.email
 OPENAI_API_KEY=your_real_key
 OPENAI_BASE_URL=https://compass.llm.shopee.io/compass-api/v1
 OPENAI_PROVIDER=OpenAI
-OPENAI_MODEL=gpt-5.4-nano
-OPENAI_UNIFIED_EVENT_MERGE_MODEL=gpt-5.4
 SOCIALDATA_SYNC_LOOKBACK_DAYS=10
 SENSORTOWER_SYNC_LOOKBACK_DAYS=3
 PIPELINE_VERIFY_API=1
@@ -154,6 +152,9 @@ VN_EVENT_DW_API_KEYS_FILE=/app/data/api_keys.json
 
 Notes:
 
+- Model selection is version-controlled in `deploy/docker/pipeline.models.env`.
+  Do not add model overrides to the VM-only `pipeline.env` file.
+
 - `SOCIALDATA_GOOGLE_SERVICE_ACCOUNT_FILE` is the best unattended auth path for weekly VM runs.
 - `SOCIALDATA_GOOGLE_SCOPES` should include `https://www.googleapis.com/auth/userinfo.email` so Socialdata can identify the granted service-account email.
 - `SOCIALDATA_USESSION` and `SOCIALDATA_GOOGLE_ACCESS_TOKEN` are optional manual fallbacks, but both expire.
@@ -163,6 +164,29 @@ Notes:
 - Leave both `VN_EVENT_DW_API_KEY` and `VN_EVENT_DW_API_KEYS_FILE` blank to keep the public read API open.
 - For one simple shared key, set `VN_EVENT_DW_API_KEY`.
 - For multiple people, prefer `VN_EVENT_DW_API_KEYS_FILE=/app/data/api_keys.json`, then generate one key per person.
+
+### Existing VM migration: move model policy into Git
+
+If this VM was deployed before `pipeline.models.env` was introduced, preserve
+the existing secret file before pulling the change. This avoids committing or
+losing its credentials:
+
+```bash
+cd /opt/vn_event_dw/vn_competitor_event_data_system
+sudo cp deploy/docker/pipeline.env /opt/vn_event_dw/pipeline.env.pre-model-policy.backup
+git restore deploy/docker/pipeline.env
+git pull origin main
+sudo cp /opt/vn_event_dw/pipeline.env.pre-model-policy.backup deploy/docker/pipeline.env
+sudo chown garenavn:garenavn deploy/docker/pipeline.env
+```
+
+Afterward, confirm the source-controlled policy is present and recreate the
+API container once:
+
+```bash
+cat deploy/docker/pipeline.models.env
+sudo docker compose --env-file deploy/docker/vm.env -f deploy/docker/docker-compose.yml up -d --force-recreate api
+```
 
 Generate a managed API key on the VM:
 

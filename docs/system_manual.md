@@ -154,9 +154,24 @@ Typical responsibilities:
 - Sensor Tower API secret
 - Socialdata app slug
 - Socialdata auth settings
-- Compass / OpenAI-compatible API key and models
+- Compass / OpenAI-compatible API key
 - overlap windows
 - verification behavior
+
+### Model policy file
+
+Path:
+
+- `deploy/docker/pipeline.models.env`
+
+This tracked file defines the non-sensitive Compass model policy used by every
+Docker job. It currently uses `gpt-5.6-luna` for high-volume detection and
+legacy Facebook merging, and `gpt-5.6-terra` for unified-event merge and
+harvest work. Do not place API keys or other secrets in this file.
+
+For an existing VM, preserve `deploy/docker/pipeline.env` outside the repo,
+reset that tracked file, pull the repository change, then copy the secret file
+back. The deployment manual contains the exact migration commands.
 
 ### Important authentication notes
 

@@ -646,6 +646,16 @@ DEFAULT_MODEL_PRICING: dict[str, ModelPricingBands] = {
         long=ModelPricing(input_per_1m=0.20, cached_input_per_1m=0.02, output_per_1m=1.25),
         long_context_threshold_tokens=None,
     ),
+    "gpt-5.6-terra": ModelPricingBands(
+        short=ModelPricing(input_per_1m=2.00, cached_input_per_1m=0.20, output_per_1m=12.00),
+        long=ModelPricing(input_per_1m=2.00, cached_input_per_1m=0.20, output_per_1m=12.00),
+        long_context_threshold_tokens=None,
+    ),
+    "gpt-5.6-luna": ModelPricingBands(
+        short=ModelPricing(input_per_1m=0.20, cached_input_per_1m=0.02, output_per_1m=1.20),
+        long=ModelPricing(input_per_1m=0.20, cached_input_per_1m=0.02, output_per_1m=1.20),
+        long_context_threshold_tokens=None,
+    ),
 }
 
 

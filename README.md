@@ -367,12 +367,15 @@ Important:
 - `OPENAI_API_KEY`
 - `OPENAI_BASE_URL`
 - `OPENAI_PROVIDER`
-- `OPENAI_MODEL`
-- `OPENAI_UNIFIED_EVENT_MERGE_MODEL`
 - optional:
-  - `OPENAI_FB_MERGE_MODEL`
   - `OPENAI_TIMEOUT_SECONDS`
   - `OPENAI_MAX_RETRIES`
+
+Model choices are version-controlled in
+[`deploy/docker/pipeline.models.env`](./deploy/docker/pipeline.models.env), not
+in the VM-only secret file. The current policy uses `gpt-5.6-luna` for
+high-volume detection and legacy Facebook merging, and `gpt-5.6-terra` for
+unified-event merge and harvest work.
 
 ## Recommended Schedules
 
